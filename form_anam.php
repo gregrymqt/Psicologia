@@ -21,29 +21,32 @@ $dados_form = $_POST ?? [];
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-  background-color: rgba(185, 219, 145, 0.75);
+  background-color:  rgba(135, 150, 99, 0.84);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   margin: 0;
-  padding-top: 150px;        }
+  padding-top: 40px; /* Valor mínimo para evitar cortar no topo */
+}
 
-  .logo-fixed {
+.logo-fixed {
   display: block;
-  margin: -100px auto 10px; /* Margem negativa no topo para subir a imagem */
-  width: 230px;
-  max-width: 100%;
+  margin: -90px auto 5px; /* Margem negativa extrema para levantar ao máximo */
+  width: 400px; /* Tamanho máximo da logo */
+  max-width: 90%;
   z-index: 1;
+  border-radius: 20px;
+  position: relative;
 }
 
 .form-container {
   background-color: white;
   border-radius: 10px;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-  margin: 0 auto; /* Centraliza o formulário */
+  margin: -70px auto 0; /* Margem negativa extrema para colar no logo */
   max-width: 900px;
   padding: 30px;
   border: 2px solid rgba(1, 37, 27, 0.3);
   position: relative;
-  z-index: 1; /* Mantém abaixo da logo */
+  z-index: 0;
 }
 
 .section-title {
@@ -71,49 +74,46 @@ $dados_form = $_POST ?? [];
   background-color: #fff3cd;
 }
 
-
 @media (max-width: 950px) {
-    body {
-    padding-top: 140px;
+  body {
+    padding-top: 30px;
   }
-  .form-container {
-    margin: 100px 20px 0;
-    width: calc(100% - 40px);
-  }
-}
-
-    @media (max-width: 599px) {
   .logo-fixed {
-    margin: -90px auto 10px;
-    width: 180px;
+    width: 350px;
+    margin: -80px auto 5px;
+  }
+  .form-container {
+    margin: -60px 20px 0;
   }
 }
 
-  .form-container {
-    margin-top: 90px;
+@media (max-width: 599px) {
+  body {
+    padding-top: 20px;
   }
-
+  .logo-fixed {
+    width: 300px;
+    margin: -60px auto 5px;
+  }
+  .form-container {
+    margin-top: -40px;
+  }
+}
 
 @media (max-width: 425px) {
-    .logo-fixed {
-    margin: -90px auto 10px;
-    width: 150px;
-  }
-  .form-container {
-    margin-top: 80px;
+  .logo-fixed {
+    width: 260px;
+    margin: -50px auto 5px;
   }
 }
 
 @media (max-width: 320px) {
-    body {
-    padding-top: 110px;
+  body {
+    padding-top: 15px;
   }
   .logo-fixed {
-    margin: -70px auto 10px;
-    width: 130px;
-  }
-  .form-container {
-    margin-top: 70px;
+    width: 220px;
+    margin: -40px auto 5px;
   }
 }
     </style>
@@ -123,7 +123,7 @@ $dados_form = $_POST ?? [];
 <body>
 
 <div class="logo-container">
-  <img class="logo-fixed" src="img/LogoLu.png" alt="Logo Tia Lu">
+  <img class="logo-fixed" src="img/marcaDaguaLu.png" alt="Logo Tia Lu">
 </div>
 
     <div class="container py-4">

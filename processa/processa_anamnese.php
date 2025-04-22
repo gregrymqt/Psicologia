@@ -120,7 +120,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' ) {
             throw new Exception("Erro ao executar a query");
         }
         $id_paciente = $conn->lastInsertId();
+
         $conn->commit();
+        header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
     } catch (PDOException $e) {
         $conn->rollBack();
         $erros[] = "Erro no banco de dados: " . $e->getMessage();

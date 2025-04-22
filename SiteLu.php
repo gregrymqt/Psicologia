@@ -2,7 +2,6 @@
 // 1. INICIAR SESSÃO (DEVE SER SEMPRE A PRIMEIRA LINHA)
 ob_start();
 session_start();
-
 // 2. INCLUIR DEPENDÊNCIAS
 require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
 require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
@@ -10,7 +9,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
-$vali=new Vali();
+$vali = new Vali();
 
 function verificarIdentidade($email, $senha)
 {
@@ -18,47 +17,71 @@ function verificarIdentidade($email, $senha)
         $conn = Conexao::getConnection();
 
         // Consulta mais segura, selecionando apenas campos necessários
-        $stmt = $conn->prepare("SELECT cd_anam, email_anam, cd_crp_anam_chefe, nome_anam, senha_anam 
+        $stmt = $conn->prepare("SELECT cd_anam, email_anam, cd_crp_anam_chefe, nome_anam, senha_anam, cd_cpf_anam_chefe 
                                FROM anamnese_chefe 
                                WHERE email_anam = :email 
                                LIMIT 1");
         $stmt->bindParam(':email', $email);
         $stmt->execute();
-
         if ($stmt->rowCount() === 0) {
             return false;
         }
-
         $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
-
         // Verificação segura da senha
         if (password_verify($senha, $usuario['senha_anam'])) {
             // Remove a senha antes de retornar
             unset($usuario['senha_anam']);
             return $usuario;
         }
-
         return false;
     } catch (PDOException $e) {
         error_log("Erro ao verificar identidade: " . $e->getMessage());
         return false;
     }
 }
+function consultaPaciente($nome)
+{
+    try {
+        $conn = Conexao::getConnection();
+        $stmt = $conn->prepare("SELECT * 
+                               FROM anamnese
+                               WHERE nome_completo = :nome
+                               LIMIT 1");
+        $stmt->bindParam(':nome', $nome);
+        $stmt->execute();
+        if ($stmt->rowCount() === 0) {
+            return false;
+        }
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro ao verificar identidade: " . $e->getMessage());
+        return false;
+    }
+}
+$usuario = $_SESSION['usuario'] ?? null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['modalLu']) || isset($_POST['botLogin'])) {
+    if (isset($_POST['botLogin'])) {
         $email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
         $senha = $_POST['senha'] ?? '';
-
         if ($usuario = verificarIdentidade($email, $senha)) {
             $_SESSION['logado'] = true;
             $_SESSION['usuario'] = [
                 'id' => $usuario['cd_anam'],  // Importante para identificar o usuário
                 'email' => $usuario['email_anam'],
                 'crp' => $usuario['cd_crp_anam_chefe'],
-                'nome' => $usuario['nome_anam']
+                'nome' => $usuario['nome_anam'],
+                'cpf' => $usuario['cd_cpf_anam_chefe']
             ];
-
+            setcookie('logado', 'true', [
+                'expires' => time() + (30 * 60),
+                'path' => '/',
+                'domain' => '', // seu domínio aqui
+                'secure' => true,
+                'httponly' => true,
+                'samesite' => 'Strict'
+            ]);
+            setcookie('usuario_id', $usuario['cd_anam'], time() + (30 * 60), '/');
             // Redirecionamento seguro
             header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
             exit;
@@ -67,77 +90,110 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
             exit;
         }
-
-
-        if (!isset($_SESSION['logado'])) {
-            $erro = $_SESSION['erro_login'] ?? '';
-            unset($_SESSION['erro_login']);
-            ?>
-            <!DOCTYPE html>
-            <html lang="pt-BR">
-
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Login Necessário</title>
-                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-                <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-            </head>
-
-            <body>
-                <div class="modal" id="loginModal" tabindex="-1">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Login</h5>
-                            </div>
-                            <form method="POST">
-                                <div class="modal-body">
-                                    <?php if (!empty($erro)): ?>
-                                        <div class="alert alert-danger"><?= htmlspecialchars($erro) ?></div>
-                                    <?php endif; ?>
-                                    <div class="mb-3">
-                                        <label class="form-label">E-mail</label>
-                                        <input type="email" name="email" class="form-control" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Senha</label>
-                                        <input type="password" name="senha" class="form-control" required>
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="submit" name="modalLu" class="btn btn-primary">Entrar</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-
-                <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-                <script>
-                    $(document).ready(function () {
-                        var myModal = new bootstrap.Modal(document.getElementById('loginModal'), {
-                            backdrop: 'static',
-                            keyboard: false
-                        });
-                        myModal.show();
-                    });
-                </script>
-            </body>
-
-            </html>
-            <?php
-            exit;
-        }
+    } elseif (isset($_POST['consul_paci']) && isset($_SESSION['logado']) && !empty($usuario['id'])) {
+        $nomeConsul = trim($_POST['nome_paciente']); // Remove espaços extras
+        $nomeConsul = filter_var($nomeConsul, FILTER_SANITIZE_STRING);
+        $dadosPaciente = consultaPaciente($nomeConsul);
+        $_SESSION['resultado_consulta'] = [
+            'dados' => $dadosPaciente,
+            'nome_buscado' => $nomeConsul
+        ];
+      header('Location: ' . htmlspecialchars($_SERVER['PHP_SELF']));
+        exit;
     }
 }
+if (!empty($_SESSION['resultado_consulta'])) {
+    $dadosPaciente = $_SESSION['resultado_consulta']['dados'];
+    $nomeConsul = $_SESSION['resultado_consulta']['nome_buscado'];
+    // Limpa o resultado da sessão imediatamente após pegar os dados
+    unset($_SESSION['resultado_consulta']);
+    if ($dadosPaciente !== false) {
+        echo '<script>
+            document.addEventListener("DOMContentLoaded", function() {
+                const container = document.getElementById("dados-paciente");
+                const resultadoDiv = document.getElementById("resultado-consulta");
+                
+                // Configurações iniciais
+                resultadoDiv.style.display = "block";
+                container.innerHTML = "";
+                
+                // Cria as linhas de dados
+                let html = \'\';';
+        foreach ($dadosPaciente as $campo => $valor) {
+            if (!empty($valor)) {
+                $campoFormatado = ucfirst(str_replace('_', ' ', $campo));
+                $valorSanitizado = htmlspecialchars($valor, ENT_QUOTES, 'UTF-8');
 
-
+                echo 'html += `<div class="col-md-6 mb-3">
+                            <div class="dados-item">
+                                <strong class="d-block text-muted small">' . $campoFormatado . '</strong>
+                                <span class="d-block">' . $valorSanitizado . '</span>
+                            </div>
+                        </div>`;';
+            }
+        }
+        echo 'if(html === \'\') {
+                    container.innerHTML = `<div class="col-12">
+                        <div class="alert alert-info">Paciente encontrado, mas nenhum dado preenchido.</div>
+                    </div>`;
+                } else {
+                    container.innerHTML = html;
+                }
+            });
+            </script>';
+    } else {
+        echo '<script>
+            document.addEventListener("DOMContentLoaded", function() {
+                const container = document.getElementById("dados-paciente");
+                container.innerHTML = `<div class="col-12">
+                    <div class="alert alert-warning">Nenhum paciente encontrado com o nome ' . htmlspecialchars($nomeConsul, ENT_QUOTES, 'UTF-8') . '</div>
+                </div>`;
+                document.getElementById("resultado-consulta").style.display = "block";
+            });
+            </script>';
+    }
+}
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+// 2. Caminho da imagem
+$logoPath = __DIR__ . '/img/marcaDaguaLu.jpeg';
+// 3. Verificações robustas
+if (!file_exists($logoPath)) {
+    die("ERRO: Imagem não encontrada em: " . realpath($logoPath));
+}
+if (!is_readable($logoPath)) {
+    die("ERRO: Sem permissão para ler a imagem. Permissões: " . substr(decoct(fileperms($logoPath)), -4));
+}
+// 4. Codificação base64 com verificação adicional
+try {
+    $imageData = file_get_contents($logoPath);
+    if ($imageData === false) {
+        throw new Exception("Falha ao ler o arquivo de imagem");
+    }
+    $mime = mime_content_type($logoPath);
+    if (!$mime) {
+        $mime = 'image/jpeg'; // Fallback para JPG se mime_content_type falhar
+    }
+    $base64 = 'data:' . $mime . ';base64,' . base64_encode($imageData);
+} catch (Exception $e) {
+    die("ERRO no processamento da imagem: " . $e->getMessage());
+}
+// 5. Configuração do DomPDF com opções otimizadas
+$options = new Options();
+$options->set('isRemoteEnabled', true);
+$options->set('isPhpEnabled', true);
+$options->set('isHtml5ParserEnabled', true);
+$options->set('debugKeepTemp', true);
+$options->set('tempDir', __DIR__ . '/tmp'); // Diretório temporário dedicado
+$options->set('fontCache', __DIR__ . '/fonts'); // Cache de fontes
+$options->set('defaultFont', 'Arial');
 // 5. SE CHEGOU ATÉ AQUI, USUÁRIO ESTÁ LOGADO
 // Agora podemos processar a página normalmente
 $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
 $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
 $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
+$cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastrado', ENT_QUOTES, 'UTF-8');
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST['gerar_atestado'])) {
@@ -162,50 +218,70 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $retorno_formatado = date("d/m/Y", strtotime($retorno));
         $data_formatada = date("d/m/Y", strtotime($data));
         // Gera o HTML do atestado
-        $html_atestado = '
-                        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-            <style>
-                body { font-family: DejaVu Sans, sans-serif; line-height: 1.6; padding: 20px; }
-                .header { text-align: center; margin-bottom: 30px; }
-                .underline { text-decoration: underline; }
-                p { margin-bottom: 15px; }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h2>ATESTADO PSICOLÓGICO</h2>
-            </div>
-            
-            <p>' . $nomeUsuario . '<br>
-            Psicóloga – CRP ' . $crpUsuario . '<br>
-            E-mail: ' . $emailUsuario . '</p>
-            
-            <p>Atesto, para os devidos fins, que o(a) Sr.(a) <span class="underline">' . $nome_paciente . '</span>, 
-            esteve em atendimento psicológico nesta data, das ' . date("H:i", strtotime($hora_inicio)) . ' 
-            às ' . date("H:i", strtotime($hora_fim)) . '.</p>
-            
-            <p>Motivo do atendimento (respeitando o sigilo profissional):</p>
-            <p>' . nl2br($motivo) . '</p>
-            
-            <p>Recomendo que, o(a) paciente poderá retornar às suas atividades habituais em ' . $retorno_formatado . '.<br>
-            E sugiro que o mesmo seja reavaliado por mim e demais profissionais de saúde que possam estar acompanhando este caso.</p>
-            
-            <p>Local: ' . $local . '<br>
-            Data: ' . $data_formatada . '</p>
-        </body>
-        </html>';
+        $html = '
+        <!DOCTYPE html>
+                   <html>
+                   <head>
+                       <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+                       <style>
+                           body { font-family: DejaVu Sans, sans-serif; line-height: 1.6; padding: 20px; }
+                           .header { text-align: center; margin-bottom: 30px; }
+                           .underline { text-decoration: underline; }
+                           p { margin-bottom: 15px; }
+           .logo {
+                       height: 200px;
+                       width: auto;
+                       max-width: 200px;
+                   }
+                   .footer {
+                       position: fixed;
+                       bottom: 0;
+                       left: 0;
+                       right: 0;
+                       text-align: center;
+                       opacity: 0.2;
+                   }
+                       
+                       </style>
+                   </head>
+                   <body>
+                       <div class="header">
+                           <h2>ATESTADO PSICOLÓGICO</h2>
+                       </div>
+                       
+                       <p>' . htmlspecialchars($nomeUsuario) . '<br>
+                       Psicóloga – CRP ' . htmlspecialchars($crpUsuario) . '<br>
+                       E-mail: ' . htmlspecialchars($emailUsuario) . '</p>
+                       
+                       <p>Atesto, para os devidos fins, que o(a) Sr.(a) <span class="underline">' . $nome_paciente . '</span>, 
+                       esteve em atendimento psicológico nesta data, das ' . date("H:i", strtotime($hora_inicio)) . ' 
+                       às ' . date("H:i", strtotime($hora_fim)) . '.</p>
+                       
+                       <p>Motivo do atendimento (respeitando o sigilo profissional):</p>
+                       <p>' . nl2br($motivo) . '</p>
+                       
+                       <p>Recomendo que, o(a) paciente poderá retornar às suas atividades habituais em ' . $retorno_formatado . '.<br>
+                       E sugiro que o mesmo seja reavaliado por mim e demais profissionais de saúde que possam estar acompanhando este caso.</p>
+                       
+                       <p>Local: ' . $local . '<br>
+                       Data: ' . htmlspecialchars($data_formatada) . '</p><br><br>
+           <img class="logo" src="' . $base64 . '" alt="Logo">
+           
+           
+           <!-- Fallback visual -->
+           <div class="fallback" style="display: none;">
+               [Imagem não carregada: ' . basename($logoPath) . ']
+           </div>
+       </body>
+       </html>';
+        $dompdf = new Dompdf($options);
         try {
-            $options = new Options();
-            $options->set('isRemoteEnabled', true);
-            $options->set('isHtml5ParserEnabled', true);
-            $options->set('defaultFont', 'DejaVu Sans');
-            $dompdf = new Dompdf($options);
-            $dompdf->loadHtml($html_atestado);
+            $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
+            set_time_limit(120); // 2 minutos para renderização
+            $dompdf->render();
+            // Limpeza de buffer
             while (ob_get_level()) {
                 ob_end_clean();
             }
@@ -215,8 +291,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             );
             exit;
         } catch (Exception $e) {
-            error_log("Erro ao gerar PDF de atestado: " . $e->getMessage());
-            die("Ocorreu um erro ao gerar o PDF. Por favor, tente novamente mais tarde.");
+            // Log detalhado do erro
+            $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
+            $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
+            file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
+
+            die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
         }
     } elseif (isset($_POST["gerar_comparecimento"])) {
         $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
@@ -238,7 +318,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $data_nasc_formatada = date("d/m/Y", strtotime($data_nascimento));
         $data_atend_formatada = date("d/m/Y", strtotime($data_atendimento));
         // Gerar HTML da declaração
-        $declaracao = '
+        $html = '
     <!DOCTYPE html>
         <html>
         <head>
@@ -261,89 +341,119 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     display: inline-block;
                     min-width: 200px;
                 }
-                .footer {
-                    margin-top: 80px;
-                    text-align: center;
-                }
+                .logo-container {
+        text-align: center;
+        margin: 20px 0;
+        width: 100%;
+    }
+    
+    /* Estilo da logo */
+    .logo {
+        height: 200px;
+        width: auto;
+        max-width: 200px;
+        display: block;
+        margin: 0 auto;
+    }
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            text-align: center;
+            opacity: 0.2;
+        }
                 .signature-line {
-                    width: 300px;
-                    border-top: 1px solid black;
-                    margin: 40px auto 0;
-                    padding-top: 5px;
-                    text-align: center;
-                }
+                    width: 300px;     
+                          border-top: 1px solid black;   
+                                    margin: 40px auto 0;           
+                                        padding-top: 5px;               
+                                             text-align: center; }
+                                    .navbar-brand img {  height: 40px;      width: auto;   transition: all 0.3s ease; }
+
             </style>
         </head>
         <body>
+
             <div class="header">
                 DECLARAÇÃO DE COMPARECIMENTO
             </div>
             
-            <p>Declaro, para os devidos fins, que o(a) Sr.(a) <span class="underline">' . $nome_paciente . '</span>,<br>
-            nascido(a) em ' . $data_nasc_formatada . ', compareceu ao atendimento psicológico nesta data,<br>
+            <p>Declaro, para os devidos fins, que o(a) Sr.(a) <span class="underline">' . htmlspecialchars($nome_paciente) . '</span>,<br>
+            nascido(a) em ' . htmlspecialchars($data_nasc_formatada) . ', compareceu ao atendimento psicológico nesta data,<br>
             no horário das ' . date("H:i", strtotime($hora_inicio)) . ' às ' . date("H:i", strtotime($hora_fim)) . '.</p>
             
             <p>Esta declaração é emitida para comprovação de presença em consulta.</p>
             
-            <p>Local: ' . $local . '<br>
-            Data: ' . $data_atend_formatada . '</p>
+            <p>Local: ' . htmlspecialchars($local) . '<br>
+            Data: ' . htmlspecialchars($data_atend_formatada) . '</p>
             
             <div class="signature-line"></div>
             
             <div class="footer">
-                ' . $nomeUsuario . '<br>
-                CRP ' . $crpUsuario . '
-            </div>
+                ' . htmlspecialchars($nomeUsuario) . '<br>
+                CRP ' . htmlspecialchars($crpUsuario) . '
+            </div><br><br>
+                       <div class="logo-container">
+    <img class="logo" src="' . $base64 . '" alt="Logo">
+</div>
+           
+           
+           <!-- Fallback visual -->
+           <div class="fallback" style="display: none;">
+               [Imagem não carregada: ' . basename($logoPath) . ']
+           </div>
+
         </body>
         </html>';
+        $dompdf = new Dompdf($options);
         try {
-            // Configuração do DomPDF
-            $options = new Options();
-            $options->set('isRemoteEnabled', true);
-            $options->set('isHtml5ParserEnabled', true);
-            $options->set('defaultFont', 'DejaVu Sans');
-            $dompdf = new Dompdf($options);
-            $dompdf->loadHtml($declaracao);
+            $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
-            // Limpar buffer de saída
+            set_time_limit(120); // 2 minutos para renderização
+            $dompdf->render();
+            // Limpeza de buffer
             while (ob_get_level()) {
                 ob_end_clean();
             }
-            // Gerar o PDF para download
             $dompdf->stream(
-                'declaracao_comparecimento_' . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . '_' . date('Ymd_His') . '.pdf',
+                "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
                 ["Attachment" => true]
             );
             exit;
         } catch (Exception $e) {
-            error_log("Erro ao gerar PDF de comparecimento: " . $e->getMessage());
-            die("Ocorreu um erro ao gerar o PDF. Por favor, tente novamente mais tarde.");
+            // Log detalhado do erro
+            $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
+            $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
+            file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
+            die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
         }
     } elseif (isset($_POST["gerar_recibo"])) {
         $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
         $cpf = $_POST['cpf'];
-
         $camposObrigatorios = ['nome_paciente', 'cpf'];
         foreach ($camposObrigatorios as $campo) {
             if (empty($_POST[$campo])) {
                 die("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
             }
         }
-
         $cpf_paciente = $vali->formatarCPF($cpf);
-        $data_hoje = date('d/m/Y');
+        date_default_timezone_set('America/Sao_Paulo');
+        // Obtém a data e hora atual
+        $dataSaoPaulo = new DateTime();
+        // Formata a data e hora (opcional)
+        $dataFormatada = $dataSaoPaulo->format('d/m/Y');
         $valor_consulta = 250.00;
         $valor_extenso = isset($veri) && method_exists($veri, 'valorPorExtenso')
             ? $veri->valorPorExtenso($valor_consulta)
             : "duzentos e cinquenta reais";
-        $data_hoje = date('d/m/Y');
+
         $data_consulta = date('d/m/Y');
         $nome_arquivo = "recibo_" . str_replace(' ', '_', $dados['nome_completo']) . "_" . date('dmY');
         $valor_formatado = "R$ " . number_format($valor_consulta, 2, ',', '.');
-
-
-        $recibo_html = '
+        ;
+        $html = '
         <!DOCTYPE html>
         <html lang="pt-BR">
         <head>
@@ -358,8 +468,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 .separador { text-align: center; margin: 20px 0; font-size: 24px; color: #555; }
                 .data-assinatura { margin-top: 50px; text-align: right; }
                 .assinatura { margin-top: 80px; border-top: 1px solid #000; padding-top: 5px; width: 300px; float: right; }
-                .footer { margin-top: 100px; font-size: 12px; text-align: center; color: #666; clear: both; }
-                .valor-extenso { font-style: italic; color: #444; }
+.logo {
+            height: 100px;
+            width: auto;
+            max-width: 200px;
+        }
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            text-align: center;
+            opacity: 0.2;
+        }                .valor-extenso { font-style: italic; color: #444; }
                 .download-btn {
                     display: block;
                     width: 200px;
@@ -370,21 +491,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     text-align: center;
                     text-decoration: none;
                     border-radius: 5px;
-                }
+                }       
+                     .navbar-brand img {  height: 40px;      width: auto;   transition: all 0.3s ease; }
+
             </style>
         </head>
         <body>
-            <div class="recibo-container">
+         <div class="recibo-container">
                 <div class="recibo">
                     <div class="header">
                         <h1>RECIBO DE PAGAMENTO – PSICÓLOGA</h1>
                     </div>
                     
                     <div class="dados-psicologo">
-                        <p><strong>Nome da Psicóloga:</strong> ' . $psicologo['nome_anam'] . '</p>
-                        <p><strong>CPF:</strong> ' . $psicologo['cd_cpf_anam_chefe'] . '</p>
-                        <p><strong>CRP:</strong> ' . $psicologo['cd_crp_anam_chefe'] . '</p>
-                        <p><strong>E-mail:</strong> ' . $psicologo['email_anam'] . '</p>
+                        <p><strong>Nome da Psicóloga:</strong> ' . htmlspecialchars($nomeUsuario) . '</p>
+                        <p><strong>CPF:</strong> ' . htmlspecialchars($cpfUsuario) . '</p>
+                        <p><strong>CRP:</strong> ' . htmlspecialchars($crpUsuario) . '</p>
+                        <p><strong>E-mail:</strong> ' . htmlspecialchars($emailUsuario) . '</p>
                     </div>
                     
                     <div class="separador">–––––––</div>
@@ -402,52 +525,54 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
                     
                     <div class="data-assinatura">
-                        <p>' . htmlspecialchars($data_hoje) . '</p>
+                        <p>' . htmlspecialchars($dataFormatada) . '</p>
                         <div class="assinatura">
-                            <p>' . htmlspecialchars($psicologo['nome_anam']) . '</p>
-                            <p>CRP ' . htmlspecialchars($psicologo['cd_crp_anam_chefe']) . '</p>
+                            <p>' . htmlspecialchars($nomeUsuario) . '</p>
+                            <p>CRP ' . htmlspecialchars($crpUsuario) . '</p>
                         </div>
                     </div>
         
                     <div class="footer">
                         <p>Este recibo é emitido para fins de comprovação de pagamento por serviços prestados na área da Psicologia, conforme legislação vigente.</p>
-                        <p>Recibo gerado em ' . htmlspecialchars($data_hoje) . '</p>
+                        <p>Recibo gerado em ' . htmlspecialchars($dataFormatada) . '</p>
                     </div>
                 </div>
             </div>
+             </div><br><br>
+                       <img class="logo" src="' . $base64 . '" alt="Logo">
+           
+           
+           <!-- Fallback visual -->
+           <div class="fallback" style="display: none;">
+               [Imagem não carregada: ' . basename($logoPath) . ']
+           </div>
         </body>
         </html>';
-
+        $dompdf = new Dompdf($options);
         try {
-            // Configuração do DomPDF
-            $options = new Options();
-            $options->set('isRemoteEnabled', true);
-            $options->set('isHtml5ParserEnabled', true);
-            $options->set('defaultFont', 'DejaVu Sans');
-            $dompdf = new Dompdf($options);
-            $dompdf->loadHtml($recibo_html);
+            $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
-            // Limpar buffer de saída
+            set_time_limit(120); // 2 minutos para renderização
+            $dompdf->render();
+            // Limpeza de buffer
             while (ob_get_level()) {
                 ob_end_clean();
             }
-            // Gerar o PDF para download
             $dompdf->stream(
-                'recibo_pagamento_' . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . '_' . date('Ymd_His') . '.pdf',
+                "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
                 ["Attachment" => true]
             );
             exit;
         } catch (Exception $e) {
-            error_log("Erro ao gerar PDF de comparecimento: " . $e->getMessage());
-            die("Ocorreu um erro ao gerar o PDF. Por favor, tente novamente mais tarde.");
+            // Log detalhado do erro
+            $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
+            $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
+            file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
+            die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
         }
-
-
     }
-
 }
-
 $paginaHTML = <<<HTML
     <!DOCTYPE html>
 <html lang="pt-BR">
@@ -459,13 +584,19 @@ $paginaHTML = <<<HTML
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
+body {
+    background-image: url('img/marcaDaguaLu.png');
+    background-size: 390px; /* Largura fixa (altura proporcional) */
+    background-repeat: no-repeat;
+    background-position: center calc(100% - 0px);  /* 50px acima do rodapé */    background-attachment: fixed;
+}
       /* Estilos da Navbar */
       .navbar-custom {
-            background-color: rgba(185, 219, 145, 0.75);
+            background-color: rgba(135, 150, 99, 0.84);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .navbar-brand img {
-            height: 40px;
+            height: 70px;
             width: auto;
             transition: all 0.3s ease;
         }
@@ -519,7 +650,23 @@ $paginaHTML = <<<HTML
         }
         .btn-group .btn {
             flex: 1 1 150px;
+            background-color: rgba(135, 150, 99, 0.84);
         }
+        .dados-item {
+    background-color: #f8f9fa;
+    border-left: 4px solid #0d6efd;
+    padding: 10px 15px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    transition: all 0.3s ease;
+}
+.dados-item:hover {
+    background-color: #e9ecef;
+    border-left-color: #0b5ed7;
+}
+#resultado-consulta {
+    animation: fadeIn 0.5s ease-out;
+}
         /* Animações */
         @keyframes fadeIn {
             from {
@@ -530,7 +677,7 @@ $paginaHTML = <<<HTML
                 opacity: 1;
                 transform: translateY(0);
             }
-        }
+        }      
         /* Ajustes para mobile */
         @media (max-width: 992px) {
             .welcome-text {
@@ -584,9 +731,7 @@ $paginaHTML = <<<HTML
     <!-- Navbar Responsiva -->
     <nav class="navbar navbar-expand-lg navbar-custom py-2 py-lg-3">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">
-                <img src="img/LogoLu.png"  alt="Logo TiaLu" class="img-fluid">
-            </a>
+            
             
             <div class="welcome-text mx-auto d-none d-sm-flex">
                 Seja bem-vinda, {$nomeUsuario}
@@ -608,9 +753,7 @@ $paginaHTML = <<<HTML
                                 <h5 class="modal-title">Login</h5>
                             </div>
                             <form method="POST">
-                                <div class="modal-body">
-                                    
-                                    
+                                <div class="modal-body">                                                                
                                     <div class="mb-3">
                                         <label class="form-label">E-mail</label>
                                         <input type="email" name="email" class="form-control" required>
@@ -626,8 +769,7 @@ $paginaHTML = <<<HTML
                             </form>
                         </div>
                     </div>
-                </div>
-    
+                </div>   
     <!-- Container Principal -->
     <div class="container mt-3 mt-md-4">
         <!-- Abas de Documentos Responsivas -->
@@ -641,8 +783,10 @@ $paginaHTML = <<<HTML
             <div class="document-tab" onclick="showDocument('recibo')">
                 <i class="bi bi-receipt d-none d-md-inline"></i> Recibo
             </div>
+            <div class="document-tab" onclick="showDocument('consulta')">
+                <i class="bi bi-receipt d-none d-md-inline"></i> Consulta
+            </div>
         </div>
-
         <!-- Formulário de Atestado (visível por padrão) -->
         <div id="atestado-content" class="document-content active">
             <form id="atestado-form" method="post" action="">
@@ -677,10 +821,10 @@ $paginaHTML = <<<HTML
                     </div>
                     <div class="col-12 mt-2">
                         <div class="btn-group">
-                            <button type="submit" class="btn btn-success" name="gerar_atestado">
+                            <button type="submit" class="btn " name="gerar_atestado">
                                 <i class="bi bi-file-earmark-pdf"></i> Gerar PDF
                             </button>
-                            <button type="reset" class="btn btn-secondary">
+                            <button type="reset" class="btn ">
                                 <i class="bi bi-eraser"></i> Limpar
                             </button>
                         </div>
@@ -718,10 +862,10 @@ $paginaHTML = <<<HTML
                     </div>
                     <div class="col-12 mt-2">
                         <div class="btn-group">
-                            <button type="submit" class="btn btn-success" name="gerar_comparecimento">
+                            <button type="submit" class="btn " name="gerar_comparecimento">
                                 <i class="bi bi-file-earmark-pdf"></i> Gerar PDF
                             </button>
-                            <button type="reset" class="btn btn-secondary">
+                            <button type="reset" class="btn ">
                                 <i class="bi bi-eraser"></i> Limpar
                             </button>
                         </div>
@@ -729,7 +873,6 @@ $paginaHTML = <<<HTML
                 </div>
             </form>
         </div>
-
         <div id="recibo-content" class="document-content">
         <form id="recibo-form" method="post" action="">
                 <div class="row g-3">
@@ -744,57 +887,98 @@ $paginaHTML = <<<HTML
                         </div>
                         <div class="col-12 mt-2">
                         <div class="btn-group">
-                        <button type="submit" class="btn btn-success" name="gerar_recibo">
+                        <button type="submit" class="btn " name="gerar_recibo">
                                 <i class="bi bi-file-earmark-pdf"></i> Gerar PDF
                             </button>
-                            <button type="reset" class="btn btn-secondary">
+                            <button type="reset" class="btn ">
                                 <i class="bi bi-eraser"></i> Limpar
                             </button>
                         </div>
                     </div>
+                    </div>           
+            </form>        
         </div>
-
-
-
-
-
-
+        <div id="consulta-content" class="document-content">
+    <form id="consulta-form" method="post" action="">
+        <div class="row g-3">
+            <div class="col-12">
+                <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
+                <input type="text" class="form-control" id="nome_paciente_recibo" name="nome_paciente" required>
+            </div>
+            <div class="col-12 mt-2">
+                <div class="btn-group">
+                    <button type="submit" class="btn " name="consul_paci">
+                        <i class="bi bi-file-earmark-pdf"></i> Consulta
+                    </button>
+                    <button type="reset" class="btn ">
+                        <i class="bi bi-eraser"></i> Limpar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+    <div id="resultado-consulta" class="mt-4" style="display: none;">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Dados do Paciente</h5>
+            </div>
+            <div class="card-body">
+                <div class="row" id="dados-paciente">
+                    <!-- Os dados serão inseridos aqui via JavaScript/PHP -->
+                </div>
+            </div>
+        </div>
     </div>
+</div>
+  </div>
     <!-- Bootstrap JS Bundle + Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
       function showDocument(documentType) {
-            // Esconde todos os conteúdos
-            document.querySelectorAll('.document-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            // Remove a classe active de todas as abas
-            document.querySelectorAll('.document-tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            // Mostra o conteúdo selecionado
-            document.getElementById(documentType + '-content').classList.add('active');
-            // Ativa a aba selecionada
-            event.currentTarget.classList.add('active');
-        }
-        // Melhorar a experiência em dispositivos móveis
-        document.addEventListener('DOMContentLoaded', function () {
-            // Ajustar altura dos textareas
-            const textareas = document.querySelectorAll('textarea');
-            textareas.forEach(textarea => {
-                textarea.style.minHeight = '100px';
-                textarea.addEventListener('focus', function () {
-                    this.style.minHeight = '150px';
-                });
-            });
-            // Suavizar rolagem nas abas em mobile
-            const tabsContainer = document.querySelector('.document-tabs');
-            if (tabsContainer.scrollWidth > tabsContainer.clientWidth) {
-                tabsContainer.classList.add('scroll-snap');
+    // Esconde todos os conteúdos
+    document.querySelectorAll('.document-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    // Remove a classe active de todas as abas
+    document.querySelectorAll('.document-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    // Mostra o conteúdo selecionado
+    document.getElementById(documentType + '-content').classList.add('active');
+    // Ativa a aba selecionada
+    event.currentTarget.classList.add('active');
+}
+// Melhorar a experiência em dispositivos móveis
+document.addEventListener('DOMContentLoaded', function () {
+    // Ajustar altura dos textareas
+    const textareas = document.querySelectorAll('textarea');
+    textareas.forEach(textarea => {
+        textarea.style.minHeight = '100px';
+        textarea.addEventListener('focus', function () {
+            this.style.minHeight = '150px';
+        });
+        textarea.addEventListener('blur', function () {
+            if (!this.value) {
+                this.style.minHeight = '100px';
             }
         });
-        
+    });   
+    // Suavizar rolagem nas abas em mobile
+    const tabsContainer = document.querySelector('.document-tabs');
+    if (tabsContainer && tabsContainer.scrollWidth > tabsContainer.clientWidth) {
+        tabsContainer.classList.add('scroll-snap');
+    } 
+    // Ativar a primeira aba por padrão se nenhuma estiver ativa
+    if (!document.querySelector('.document-tab.active')) {
+        const firstTab = document.querySelector('.document-tab');
+        if (firstTab) {
+            firstTab.classList.add('active');
+            const firstContent = document.querySelector('.document-content');
+            if (firstContent) firstContent.classList.add('active');
+        }
+    }
+});      
     </script>
 </body>
 </html>
@@ -802,5 +986,4 @@ HTML;
 
 echo $paginaHTML;
 
-// ... [restante do seu código HTML] ...
 ?>
