@@ -469,7 +469,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 .data-assinatura { margin-top: 50px; text-align: right; }
                 .assinatura { margin-top: 80px; border-top: 1px solid #000; padding-top: 5px; width: 300px; float: right; }
 .logo {
-            height: 100px;
+            height: 95px;
             width: auto;
             max-width: 200px;
         }
