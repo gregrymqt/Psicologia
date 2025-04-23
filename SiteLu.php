@@ -418,7 +418,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 ob_end_clean();
             }
             $dompdf->stream(
-                "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
+                "Comparecimento_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
                 ["Attachment" => true]
             );
             exit;
@@ -560,7 +560,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 ob_end_clean();
             }
             $dompdf->stream(
-                "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
+                "Recibo_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
                 ["Attachment" => true]
             );
             exit;
