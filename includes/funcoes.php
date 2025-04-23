@@ -38,9 +38,6 @@ function exibirResultados($resultados) {
 
 class Vali{
 
-
-    
-
  public function formatarCPF($cpf)
 {
     if (empty($cpf))
@@ -102,8 +99,6 @@ function valorPorExtenso($valor = 0)
     return $rt ? ucfirst($rt) : "Zero reais";
 }
 
-
-
 function validarCPF($cpf)
 {
     $cpf = preg_replace('/[^0-9]/', '', $cpf);
@@ -138,5 +133,5 @@ function validarTelefone($telefone)
 {
     $telefone = preg_replace('/[^0-9]/', '', $telefone);
     return (strlen($telefone) >= 10 && strlen($telefone) <= 11);
-}
-}
+}}
+

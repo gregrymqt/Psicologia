@@ -11,34 +11,7 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 $vali = new Vali();
 
-function verificarIdentidade($email, $senha)
-{
-    try {
-        $conn = Conexao::getConnection();
 
-        // Consulta mais segura, selecionando apenas campos necessários
-        $stmt = $conn->prepare("SELECT cd_anam, email_anam, cd_crp_anam_chefe, nome_anam, senha_anam, cd_cpf_anam_chefe 
-                               FROM anamnese_chefe 
-                               WHERE email_anam = :email 
-                               LIMIT 1");
-        $stmt->bindParam(':email', $email);
-        $stmt->execute();
-        if ($stmt->rowCount() === 0) {
-            return false;
-        }
-        $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
-        // Verificação segura da senha
-        if (password_verify($senha, $usuario['senha_anam'])) {
-            // Remove a senha antes de retornar
-            unset($usuario['senha_anam']);
-            return $usuario;
-        }
-        return false;
-    } catch (PDOException $e) {
-        error_log("Erro ao verificar identidade: " . $e->getMessage());
-        return false;
-    }
-}
 function consultaPaciente($nome)
 {
     try {
@@ -61,36 +34,8 @@ function consultaPaciente($nome)
 $usuario = $_SESSION['usuario'] ?? null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['botLogin'])) {
-        $email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
-        $senha = $_POST['senha'] ?? '';
-        if ($usuario = verificarIdentidade($email, $senha)) {
-            $_SESSION['logado'] = true;
-            $_SESSION['usuario'] = [
-                'id' => $usuario['cd_anam'],  // Importante para identificar o usuário
-                'email' => $usuario['email_anam'],
-                'crp' => $usuario['cd_crp_anam_chefe'],
-                'nome' => $usuario['nome_anam'],
-                'cpf' => $usuario['cd_cpf_anam_chefe']
-            ];
-            setcookie('logado', 'true', [
-                'expires' => time() + (30 * 60),
-                'path' => '/',
-                'domain' => '', // seu domínio aqui
-                'secure' => true,
-                'httponly' => true,
-                'samesite' => 'Strict'
-            ]);
-            setcookie('usuario_id', $usuario['cd_anam'], time() + (30 * 60), '/');
-            // Redirecionamento seguro
-            header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
-            exit;
-        } else {
-            $_SESSION['erro_login'] = "E-mail ou senha incorretos!";
-            header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
-            exit;
-        }
-    } elseif (isset($_POST['consul_paci']) && isset($_SESSION['logado']) && !empty($usuario['id'])) {
+   
+    if (isset($_POST['consul_paci']) && isset($_SESSION['logado']) && !empty($usuario['id'])) {
         $nomeConsul = trim($_POST['nome_paciente']); // Remove espaços extras
         $nomeConsul = filter_var($nomeConsul, FILTER_SANITIZE_STRING);
         $dadosPaciente = consultaPaciente($nomeConsul);
@@ -573,6 +518,142 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
 }
+
+class Autenticar{
+    public function getBotaoLogin(): string {
+        if ($this->estaLogado()) {
+            $nome = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Usuário');
+            return <<<HTML
+            <form method="post" class="m-0">
+                <input type="hidden" name="csrf_token" value="{$_SESSION['csrf_token']}">
+                <button type="submit" name="logout" class="btn btn-outline-danger">
+                    <i class="bi bi-box-arrow-right"></i> Sair ($nome)
+                </button>
+            </form>
+            HTML;
+        }
+        return <<<HTML
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#loginModal">
+            <i class="bi bi-box-arrow-in-right"></i> Login
+        </button>
+        HTML;
+    }
+    
+    function verificarIdentidade($email, $senha)
+    {
+        try {
+            $conn = Conexao::getConnection();
+    
+            // Consulta mais segura, selecionando apenas campos necessários
+            $stmt = $conn->prepare("SELECT cd_anam, email_anam, cd_crp_anam_chefe, nome_anam, senha_anam, cd_cpf_anam_chefe 
+                                   FROM anamnese_chefe 
+                                   WHERE email_anam = :email 
+                                   LIMIT 1");
+            $stmt->bindParam(':email', $email);
+            $stmt->execute();
+            if ($stmt->rowCount() === 0) {
+                return false;
+            }
+            $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Verificação segura da senha
+            if (password_verify($senha, $usuario['senha_anam'])) {
+                // Remove a senha antes de retornar
+                unset($usuario['senha_anam']);
+                return $usuario;
+            }
+            return false;
+        } catch (PDOException $e) {
+            error_log("Erro ao verificar identidade: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    public function processarLogin(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['botLogin'])) {
+            return;
+        }
+    
+        // Verifica CSRF token
+        if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+            $this->erroLogin('Token de segurança inválido');
+            return;
+        }
+    
+        $email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
+        $senha = $_POST['senha'] ?? '';
+    
+        if (!$email || !$senha) {
+            $this->erroLogin('Credenciais inválidas');
+            return;
+        }
+    
+        $usuario = $this->verificarIdentidade($email, $senha);
+        
+        if (!$usuario) {
+            $this->erroLogin('E-mail ou senha incorretos');
+            return;
+        }
+    
+        $_SESSION['logado'] = true;
+        $_SESSION['usuario'] = [
+            'id' => $usuario['cd_anam'],
+            'email' => $usuario['email_anam'],
+            'crp' => $usuario['cd_crp_anam_chefe'],
+            'nome' => $usuario['nome_anam'],
+            'cpf' => $usuario['cd_cpf_anam_chefe']
+        ];
+    
+        // Gera novo token CSRF após login
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    
+        // Redirecionamento seguro
+        header('Location: ' . $this->getSafeRedirectUrl());
+        exit();
+    }
+    
+    private function erroLogin(string $mensagem): void {
+        $_SESSION['erro_login'] = $mensagem;
+        header('Location: ' . $this->getSafeRedirectUrl());
+        exit();
+    }
+    
+    private function getSafeRedirectUrl(): string {
+        return htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8');
+    }
+    
+    
+    public function verificarLogin(): void {
+        session_start();
+        
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            if (isset($_POST['botLogin'])) {
+                $this->processarLogin();
+            } elseif (isset($_POST['logout'])) {
+                $this->processarLogout();
+            }
+        }
+    }
+    
+    private function processarLogout(): void {
+        session_unset();
+        session_destroy();
+        header("Location: ".$_SERVER['PHP_SELF']);
+        exit();
+    }
+    
+    private function estaLogado(): bool {
+        return isset($_SESSION['logado']) && $_SESSION['logado'] === true;
+    }
+    
+    
+    }
+
+
+
+$veri = new Autenticar();
+$veri->processarLogin();
+
+
 $paginaHTML = <<<HTML
     <!DOCTYPE html>
 <html lang="pt-BR">
@@ -740,36 +821,36 @@ body {
             <!-- Botão de Login (só aparece se não logado) -->
             
             <div class="d-flex">
-            <button type="button" class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#logmod">
-                    <i class="bi bi-box-arrow-in-right"></i> Login
-                </button>
-            </div>
+    {$veri->getBotaoLogin()}
+  </div>
         </div>
     </nav>
-    <div class="modal" id="logmod" tabindex="-1">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Login</h5>
-                            </div>
-                            <form method="POST">
-                                <div class="modal-body">                                                                
-                                    <div class="mb-3">
-                                        <label class="form-label">E-mail</label>
-                                        <input type="email" name="email" class="form-control" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Senha</label>
-                                        <input type="password" name="senha" class="form-control" required>
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="submit" name="botLogin" class="btn btn-primary">Entrar</button>
-                                </div>
-                            </form>
-                        </div>
+    
+    <div class="modal fade" id="loginModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" >
+                <div class="modal-header">
+                    <h5 class="modal-title">Login</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="email" class="form-label">E-mail</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
                     </div>
-                </div>   
+                    <div class="mb-3">
+                        <label for="senha" class="form-label">Senha</label>
+                        <input type="password" class="form-control" id="senha" name="senha" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="submit" name="botLogin" class="btn btn-primary">Entrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> 
     <!-- Container Principal -->
     <div class="container mt-3 mt-md-4">
         <!-- Abas de Documentos Responsivas -->
