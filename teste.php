@@ -165,13 +165,17 @@ try {
 }
 
 // 8. Verificação pós-execução (apenas para debug)
-register_shutdown_function(function() {
-    $error = error_get_last();
-    if ($error !== null) {
-        file_put_contents(
-            __DIR__ . '/shutdown_errors.log',
-            print_r($error, true),
-            FILE_APPEND
-        );
-    }
-});
+public function exibirBotoesAuth() {
+    return '<div class="auth-buttons" style="position: static; margin-left: auto;">' . 
+           (isset($_SESSION['usuario']) ? $this->botaoLogout() : $this->botaoLogin()) . 
+           '</div>';
+}
+private function botaoLogin() {
+    return '<button class="btn btn-outline-primary" onclick="abrirModal()">
+    <i class="bi bi-box-arrow-in-right"></i> Login</button>';
+}
+private function botaoLogout() {
+    $nome = htmlspecialchars($_SESSION['usuario']['nome']);
+    return '<button class="btn btn-outline-danger" onclick="window.location.href=\'?logout=1\'">
+    <i class="bi bi-box-arrow-right"></i> Sair ('.$nome.')</button>';
+}
