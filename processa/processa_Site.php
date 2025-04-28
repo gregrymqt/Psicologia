@@ -9,7 +9,28 @@ require_once __DIR__ . '/../vendor/autoload.php'; // ou o caminho correto$vali =
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
-class Paciente
+
+$paci = new Paciente();
+$pdf = new ProcessaPdfs();
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    if (isset($_POST["gerar_recibo"])) {
+        $pdf->gerarRecibo();
+        exit;
+    } elseif (isset($_POST["gerar_comparecimento"])) {
+        $pdf->gerarComparecimento();
+        exit();
+    } elseif (isset($_POST['gerar_atestado'])) {
+        $pdf->gerarAtestado();
+    } elseif (isset($_POST['consul_paci'])) {
+        $paci->veriPaciente();
+
+    } else {
+        header('SiteLu.php');
+    }
+}
+
+
+class Paciente 
 {
     public function consultaPaciente($nome)
     {
@@ -32,147 +53,161 @@ class Paciente
     }
     public function veriPaciente()
     {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
-            if (isset($_POST['consul_paci']) && isset($_SESSION['logado']) && !empty($usuario['id'])) {
-                $nomeConsul = trim($_POST['nome_paciente']); // Remove espaços extras
-                $nomeConsul = filter_var($nomeConsul, FILTER_SANITIZE_STRING);
-                $dadosPaciente = Paciente::consultaPaciente($nomeConsul);
-                $_SESSION['resultado_consulta'] = [
-                    'dados' => $dadosPaciente,
-                    'nome_buscado' => $nomeConsul
-                ];
-                header('Location: ' . htmlspecialchars($_SERVER['PHP_SELF']));
-                exit;
-            }
+        // Verifica se o usuário está logado
+        if (!isset($_SESSION['logado']) || empty($_SESSION['usuario']['id'])) {
+            return false;
         }
+        // Valida e sanitiza o input
+        if (empty($_POST['nome_paciente'])) {
+            $_SESSION['erro_consulta'] = "Por favor, informe o nome do paciente";
+            header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
+            exit;
+        }   
+        $nomeConsul = trim($_POST['nome_paciente']);
+        $nomeConsul = filter_var($nomeConsul, FILTER_SANITIZE_STRING, FILTER_FLAG_STRIP_LOW);   
+        // Consulta o paciente
+        return [
+            'dados' => $this->consultaPaciente($nomeConsul),
+            'nome_buscado' => $nomeConsul,
+            'timestamp' => time()
+        ];
     }
-    public function resulConsulta()
+    public function resulConsulta($resultado = null)
     {
-        if (!empty($_SESSION['resultado_consulta'])) {
-            $dadosPaciente = $_SESSION['resultado_consulta']['dados'];
-            $nomeConsul = $_SESSION['resultado_consulta']['nome_buscado'];
-            // Limpa o resultado da sessão imediatamente após pegar os dados
+        // Se nenhum resultado for passado, verifica na sessão
+        if ($resultado === null && isset($_SESSION['resultado_consulta'])) {
+            $resultado = $_SESSION['resultado_consulta'];
             unset($_SESSION['resultado_consulta']);
-            if ($dadosPaciente !== false) {
-                echo '<script>
-            document.addEventListener("DOMContentLoaded", function() {
-                const container = document.getElementById("dados-paciente");
-                const resultadoDiv = document.getElementById("resultado-consulta");
-                
-                // Configurações iniciais
-                resultadoDiv.style.display = "block";
-                container.innerHTML = "";
-                
-                // Cria as linhas de dados
-                let html = \'\';';
-                foreach ($dadosPaciente as $campo => $valor) {
-                    if (!empty($valor)) {
-                        $campoFormatado = ucfirst(str_replace('_', ' ', $campo));
-                        $valorSanitizado = htmlspecialchars($valor, ENT_QUOTES, 'UTF-8');
-
-                        echo 'html += `<div class="col-md-6 mb-3">
-                            <div class="dados-item">
-                                <strong class="d-block text-muted small">' . $campoFormatado . '</strong>
-                                <span class="d-block">' . $valorSanitizado . '</span>
-                            </div>
-                        </div>`;';
-                    }
-                }
-                echo 'if(html === \'\') {
-                    container.innerHTML = `<div class="col-12">
-                        <div class="alert alert-info">Paciente encontrado, mas nenhum dado preenchido.</div>
-                    </div>`;
-                } else {
-                    container.innerHTML = html;
-                }
-            });
-            </script>';
-            } else {
-                echo '<script>
-            document.addEventListener("DOMContentLoaded", function() {
-                const container = document.getElementById("dados-paciente");
-                container.innerHTML = `<div class="col-12">
-                    <div class="alert alert-warning">Nenhum paciente encontrado com o nome ' . htmlspecialchars($nomeConsul, ENT_QUOTES, 'UTF-8') . '</div>
-                </div>`;
-                document.getElementById("resultado-consulta").style.display = "block";
-            });
-            </script>';
-            }
         }
-    }
-}
+        // Se ainda não tiver resultado, retorna vazio
+        if (!$resultado) {
+            return '';
+        }
+
+        $nomeBuscado = htmlspecialchars($resultado['nome_buscado'], ENT_QUOTES, 'UTF-8');
+
+        if ($resultado['dados'] === false) {
+            return <<<HTML
+            <div class="col-12">
+                <div class="alert alert-warning">
+                    Nenhum paciente encontrado com o nome "{$nomeBuscado}"
+                </div>
+            </div>
+            HTML;
+        }
+      
+            $html= '';
+            $temDados = false;
+            foreach ($resultado['dados'] as $campo => $valor) {
+                if (!empty($valor)) {
+                    $temDados = true;
+                    $campoFormatado = ucfirst(str_replace('_', ' ', $campo));
+                    $valorSanitizado = htmlspecialchars($valor, ENT_QUOTES, 'UTF-8');
+
+                    $html .= <<<HTML
+                    <div class="col-md-6 mb-3">
+                        <div class="dados-item">
+                            <strong class="d-block text-muted small">{$campoFormatado}</strong>
+                            <span class="d-block">{$valorSanitizado}</span>
+                        </div>
+                    </div>
+                    HTML;
+                }
+            } 
+            if (!$temDados) {
+                return <<<HTML
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        Paciente encontrado, mas nenhum dado preenchido.
+                    </div>
+                </div>
+                HTML;
+            }
+            return $html;
+        }}
+
+    
+
+
 class ProcessaPdfs
 {
+    private $logoPath;
+    private $base64;
+    private $options;
+
+    public function __construct()
+    {
+        $this->configurarImg(); // Configura automaticamente ao instanciar
+
+    }
     public function configurarImg()
     {
         ini_set('display_errors', 1);
         ini_set('display_startup_errors', 1);
         error_reporting(E_ALL);
         // 2. Caminho da imagem
-        $logoPath = __DIR__ . '/img/marcaDaguaLu.jpeg';
+        $this->logoPath = 'c:/xampp/htdocs/TiaLu/img/marcaDaguaLu.jpeg';
         // 3. Verificações robustas
-        if (!file_exists($logoPath)) {
-            die("ERRO: Imagem não encontrada em: " . realpath($logoPath));
+        if (!file_exists($this->logoPath)) {
+            die("ERRO: Imagem não encontrada em: " . realpath($this->logoPath));
         }
-        if (!is_readable($logoPath)) {
-            die("ERRO: Sem permissão para ler a imagem. Permissões: " . substr(decoct(fileperms($logoPath)), -4));
+        if (!is_readable($this->logoPath)) {
+            die("ERRO: Sem permissão para ler a imagem. Permissões: " . substr(decoct(fileperms($this->logoPath)), -4));
         }
         // 4. Codificação base64 com verificação adicional
         try {
-            $imageData = file_get_contents($logoPath);
+            $imageData = file_get_contents($this->logoPath);
             if ($imageData === false) {
                 throw new Exception("Falha ao ler o arquivo de imagem");
             }
-            $mime = mime_content_type($logoPath);
+            $mime = mime_content_type($this->logoPath);
             if (!$mime) {
                 $mime = 'image/jpeg'; // Fallback para JPG se mime_content_type falhar
             }
-            $base64 = 'data:' . $mime . ';base64,' . base64_encode($imageData);
+            $this->base64 = 'data:' . $mime . ';base64,' . base64_encode($imageData);
         } catch (Exception $e) {
             die("ERRO no processamento da imagem: " . $e->getMessage());
         }
         // 5. Configuração do DomPDF com opções otimizadas
-        $options = new Options();
-        $options->set('isRemoteEnabled', true);
-        $options->set('isPhpEnabled', true);
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('debugKeepTemp', true);
-        $options->set('tempDir', __DIR__ . '/tmp'); // Diretório temporário dedicado
-        $options->set('fontCache', __DIR__ . '/fonts'); // Cache de fontes
-        $options->set('defaultFont', 'Arial');
+        $this->options = new Options();
+        $this->options->set('isRemoteEnabled', true);
+        $this->options->set('isPhpEnabled', true);
+        $this->options->set('isHtml5ParserEnabled', true);
+        $this->options->set('debugKeepTemp', true);
+        $this->options->set('tempDir', __DIR__ . '/tmp'); // Diretório temporário dedicado
+        $this->options->set('fontCache', __DIR__ . '/fonts'); // Cache de fontes
+        $this->options->set('defaultFont', 'Arial');
         // 5. SE CHEGOU ATÉ AQUI, USUÁRIO ESTÁ LOGADO
 // Agora podemos processar a página normalmente
     }
     public function gerarAtestado()
     {
-        if ($_SERVER["REQUEST_METHOD"] == "POST" && (isset($_POST['gerar_atestado']))) {
-            $camposObrigatorios = ['nome_paciente', 'hora_inicio', 'hora_fim', 'motivo', 'retorno', 'data', 'local'];
-            foreach ($camposObrigatorios as $campo) {
-                if (empty($_POST[$campo])) {
-                    die("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
-                }
+        $camposObrigatorios = ['nome_paciente', 'hora_inicio', 'hora_fim', 'motivo', 'retorno', 'data', 'local'];
+        foreach ($camposObrigatorios as $campo) {
+            if (empty($_POST[$campo])) {
+                die("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
             }
-            // Processa os dados do formulário
-            $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
-            $hora_inicio = htmlspecialchars($_POST["hora_inicio"] ?? '');
-            $hora_fim = htmlspecialchars($_POST["hora_fim"] ?? '');
-            $motivo = htmlspecialchars($_POST["motivo"] ?? '');
-            $retorno = htmlspecialchars($_POST["retorno"] ?? '');
-            $data = htmlspecialchars($_POST["data"] ?? '');
-            $local = htmlspecialchars($_POST["local"] ?? '');
-            if (!strtotime($retorno) || !strtotime($data)) {
-                die("Data inválida. Por favor, verifique as datas informadas.");
-            }
-            // Formata as datas
-            $retorno_formatado = date("d/m/Y", strtotime($retorno));
-            $data_formatada = date("d/m/Y", strtotime($data));
+        }
+        // Processa os dados do formulário
+        $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
+        $hora_inicio = htmlspecialchars($_POST["hora_inicio"] ?? '');
+        $hora_fim = htmlspecialchars($_POST["hora_fim"] ?? '');
+        $motivo = htmlspecialchars($_POST["motivo"] ?? '');
+        $retorno = htmlspecialchars($_POST["retorno"] ?? '');
+        $data = htmlspecialchars($_POST["data"] ?? '');
+        $local = htmlspecialchars($_POST["local"] ?? '');
+        if (!strtotime($retorno) || !strtotime($data)) {
+            die("Data inválida. Por favor, verifique as datas informadas.");
+        }
+        // Formata as datas
+        $retorno_formatado = date("d/m/Y", strtotime($retorno));
+        $data_formatada = date("d/m/Y", strtotime($data));
 
-            $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
-            $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
-            $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
-            // Gera o HTML do atestado
-            $html = '
+        $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
+        $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
+        $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
+        // Gera o HTML do atestado
+        $html = '
             <!DOCTYPE html>
                        <html>
                        <head>
@@ -218,65 +253,64 @@ class ProcessaPdfs
                            
                            <p>Local: ' . $local . '<br>
                            Data: ' . htmlspecialchars($data_formatada) . '</p><br><br>
-               <img class="logo" src="' . $base64 . '" alt="Logo">              
+               <img class="logo" src="' . $this->base64 . '" alt="Logo">              
                
                <!-- Fallback visual -->
                <div class="fallback" style="display: none;">
-                   [Imagem não carregada: ' . basename($logoPath) . ']
+                   [Imagem não carregada: ' . basename($this->logoPath) . ']
                </div>
            </body>
            </html>';
-            $dompdf = new Dompdf($options);
-            try {
-                $dompdf->loadHtml($html);
-                $dompdf->setPaper('A4', 'portrait');
-                $dompdf->render();
-                set_time_limit(120); // 2 minutos para renderização
-                $dompdf->render();
-                // Limpeza de buffer
-                while (ob_get_level()) {
-                    ob_end_clean();
-                }
-                $dompdf->stream(
-                    "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
-                    ["Attachment" => true]
-                );
-                exit;
-            } catch (Exception $e) {
-                // Log detalhado do erro
-                $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
-                $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
-                file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
-                die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
+        $dompdf = new Dompdf($this->options);
+        try {
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+            set_time_limit(120); // 2 minutos para renderização
+            $dompdf->render();
+            // Limpeza de buffer
+            while (ob_get_level()) {
+                ob_end_clean();
             }
-
+            $dompdf->stream(
+                "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
+                ["Attachment" => true]
+            );
+            exit;
+        } catch (Exception $e) {
+            // Log detalhado do erro
+            $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
+            $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
+            file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
+            die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
         }
+
     }
+
     public function gerarComparecimento()
     {
-        if ($_SERVER["REQUEST_METHOD"] == "POST" && (isset($_POST["gerar_comparecimento"]))) {
-            $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
-            $data_nascimento = htmlspecialchars($_POST["data_nascimento"] ?? '');
-            $hora_inicio = htmlspecialchars($_POST["horario_inicio"] ?? '');
-            $hora_fim = htmlspecialchars($_POST["horario_fim"] ?? '');
-            $local = htmlspecialchars($_POST["local"] ?? '');
-            $data_atendimento = htmlspecialchars($_POST["data_atendimento"] ?? '');
-            $camposObrigatorios = ['nome_paciente', 'data_nascimento', 'horario_inicio', 'horario_fim', 'local', 'data_atendimento'];
-            foreach ($camposObrigatorios as $campo) {
-                if (empty($_POST[$campo])) {
-                    die("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
-                }
+        $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
+        $data_nascimento = htmlspecialchars($_POST["data_nascimento"] ?? '');
+        $hora_inicio = htmlspecialchars($_POST["horario_inicio"] ?? '');
+        $hora_fim = htmlspecialchars($_POST["horario_fim"] ?? '');
+        $local = htmlspecialchars($_POST["local"] ?? '');
+        $data_atendimento = htmlspecialchars($_POST["data_atendimento"] ?? '');
+        $camposObrigatorios = ['nome_paciente', 'data_nascimento', 'horario_inicio', 'horario_fim', 'local', 'data_atendimento'];
+        foreach ($camposObrigatorios as $campo) {
+            if (empty($_POST[$campo])) {
+                die("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
             }
-            if (!strtotime($data_nascimento) || !strtotime($data_atendimento)) {
-                die("Data inválida. Por favor, verifique as datas informadas.");
-            }
-            // Formatar datas
-            $data_nasc_formatada = date("d/m/Y", strtotime($data_nascimento));
-            $data_atend_formatada = date("d/m/Y", strtotime($data_atendimento));
-            $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
-            $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
-            // Gerar HTML da declaração
-            $html = '
+        }
+        if (!strtotime($data_nascimento) || !strtotime($data_atendimento)) {
+            die("Data inválida. Por favor, verifique as datas informadas.");
+        }
+        // Formatar datas
+        $data_nasc_formatada = date("d/m/Y", strtotime($data_nascimento));
+        $data_atend_formatada = date("d/m/Y", strtotime($data_atendimento));
+        $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
+        $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
+        // Gerar HTML da declaração
+        $html = '
     <!DOCTYPE html>
         <html>
         <head>
@@ -351,74 +385,74 @@ class ProcessaPdfs
                 CRP ' . htmlspecialchars($crpUsuario) . '
             </div><br><br>
                        <div class="logo-container">
-    <img class="logo" src="' . $base64 . '" alt="Logo">
+    <img class="logo" src="' . $this->base64 . '" alt="Logo">
 </div>
            
            
            <!-- Fallback visual -->
            <div class="fallback" style="display: none;">
-               [Imagem não carregada: ' . basename($logoPath) . ']
+               [Imagem não carregada: ' . basename($this->logoPath) . ']
            </div>
 
         </body>
         </html>';
-            $dompdf = new Dompdf($options);
-            try {
-                $dompdf->loadHtml($html);
-                $dompdf->setPaper('A4', 'portrait');
-                $dompdf->render();
-                set_time_limit(120); // 2 minutos para renderização
-                $dompdf->render();
-                // Limpeza de buffer
-                while (ob_get_level()) {
-                    ob_end_clean();
-                }
-                $dompdf->stream(
-                    "Comparecimento_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
-                    ["Attachment" => true]
-                );
-                exit;
-            } catch (Exception $e) {
-                // Log detalhado do erro
-                $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
-                $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
-                file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
-                die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
+        $dompdf = new Dompdf($this->options);
+        try {
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+            set_time_limit(120); // 2 minutos para renderização
+            $dompdf->render();
+            // Limpeza de buffer
+            while (ob_get_level()) {
+                ob_end_clean();
             }
+            $dompdf->stream(
+                "Comparecimento_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
+                ["Attachment" => true]
+            );
+            exit;
+        } catch (Exception $e) {
+            // Log detalhado do erro
+            $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
+            $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
+            file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
+            die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
         }
     }
+
     public function gerarRecibo()
     {
-        if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["gerar_recibo"])) {
-            $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
-            $cpf = $_POST['cpf'];
-            $camposObrigatorios = ['nome_paciente', 'cpf'];
-            foreach ($camposObrigatorios as $campo) {
-                if (empty($_POST[$campo])) {
-                    die("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
-                }
-            }
-            $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
-            $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
-            $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
-            $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastrado', ENT_QUOTES, 'UTF-8');
-            $vali = new Vali();
 
-            $cpf_paciente = $vali->formatarCPF($cpf);
-            date_default_timezone_set('America/Sao_Paulo');
-            // Obtém a data e hora atual
-            $dataSaoPaulo = new DateTime();
-            // Formata a data e hora (opcional)
-            $dataFormatada = $dataSaoPaulo->format('d/m/Y');
-            $valor_consulta = 250.00;
-            $valor_extenso = isset($veri) && method_exists($veri, 'valorPorExtenso')
-                ? $veri->valorPorExtenso($valor_consulta)
-                : "duzentos e cinquenta reais";
-            $data_consulta = date('d/m/Y');
-            $nome_arquivo = "recibo_" . str_replace(' ', '_', $dados['nome_completo']) . "_" . date('dmY');
-            $valor_formatado = "R$ " . number_format($valor_consulta, 2, ',', '.');
-            ;
-            $html = '
+
+        $camposObrigatorios = ['nome_paciente', 'cpf'];
+        foreach ($camposObrigatorios as $campo) {
+            if (empty($_POST[$campo])) {
+                die("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
+            }
+        }
+        $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
+        $cpf = $_POST['cpf'];
+
+        $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
+        $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
+        $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
+        $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastrado', ENT_QUOTES, 'UTF-8');
+        $vali = new Vali();
+
+        $cpf_paciente = $vali->formatarCPF($cpf);
+        date_default_timezone_set('America/Sao_Paulo');
+        // Obtém a data e hora atual
+        $dataSaoPaulo = new DateTime();
+        // Formata a data e hora (opcional)
+        $dataFormatada = $dataSaoPaulo->format('d/m/Y');
+        $valor_consulta = 250.00;
+        $valor_extenso = isset($veri) && method_exists($veri, 'valorPorExtenso')
+            ? $veri->valorPorExtenso($valor_consulta)
+            : "duzentos e cinquenta reais";
+        $valor_formatado = "R$ " . number_format($valor_consulta, 2, ',', '.');
+        ;
+        $html = '
         <!DOCTYPE html>
         <html lang="pt-BR">
         <head>
@@ -504,46 +538,47 @@ class ProcessaPdfs
                 </div>
             </div>
              </div><br><br>
-                       <img class="logo" src="' . $base64 . '" alt="Logo">
+                       <img class="logo" src="' . $this->base64 . '" alt="Logo">
            
            
            <!-- Fallback visual -->
            <div class="fallback" style="display: none;">
-               [Imagem não carregada: ' . basename($logoPath) . ']
+               [Imagem não carregada: ' . basename($this->logoPath) . ']
            </div>
         </body>
         </html>';
-            $dompdf = new Dompdf($options);
-            try {
-                $dompdf->loadHtml($html);
-                $dompdf->setPaper('A4', 'portrait');
-                $dompdf->render();
-                set_time_limit(120); // 2 minutos para renderização
-                $dompdf->render();
-                // Limpeza de buffer
-                while (ob_get_level()) {
-                    ob_end_clean();
-                }
-                $dompdf->stream(
-                    "Recibo_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
-                    ["Attachment" => true]
-                );
-                exit;
-            } catch (Exception $e) {
-                // Log detalhado do erro
-                $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
-                $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
-                file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
-                die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
+        $dompdf = new Dompdf($this->options);
+        try {
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+            set_time_limit(120); // 2 minutos para renderização
+            $dompdf->render();
+            // Limpeza de buffer
+            while (ob_get_level()) {
+                ob_end_clean();
             }
-
+            $dompdf->stream(
+                "Recibo_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
+                ["Attachment" => true]
+            );
+            exit;
+        } catch (Exception $e) {
+            // Log detalhado do erro
+            $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
+            $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
+            file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
+            die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
         }
 
     }
+
 }
-class Psicologa{
-    
-    public function __construct() {
+
+class Psicologa
+{
+    public function __construct()
+    {
         if (isset($_COOKIE['logado']) && $_COOKIE['logado'] === 'true' && !isset($_SESSION['logado'])) {
             $_SESSION['logado'] = true;
             // Você pode querer recarregar os dados do usuário aqui
@@ -552,109 +587,111 @@ class Psicologa{
         $this->processarLogout();
     }
     function verificarIdentidade($email, $senha)
-{
-    try {
-        $conn = Conexao::getConnection();
+    {
+        try {
+            $conn = Conexao::getConnection();
 
-        // Consulta mais segura, selecionando apenas campos necessários
-        $stmt = $conn->prepare("SELECT cd_anam, email_anam, cd_crp_anam_chefe, nome_anam, senha_anam, cd_cpf_anam_chefe 
+            // Consulta mais segura, selecionando apenas campos necessários
+            $stmt = $conn->prepare("SELECT cd_anam, email_anam, cd_crp_anam_chefe, nome_anam, senha_anam, cd_cpf_anam_chefe 
                                FROM anamnese_chefe 
                                WHERE email_anam = :email 
                                LIMIT 1");
-        $stmt->bindParam(':email', $email);
-        $stmt->execute();
-        if ($stmt->rowCount() === 0) {
+            $stmt->bindParam(':email', $email);
+            $stmt->execute();
+            if ($stmt->rowCount() === 0) {
+                return false;
+            }
+            $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Verificação segura da senha
+            if (password_verify($senha, $usuario['senha_anam'])) {
+                // Remove a senha antes de retornar
+                unset($usuario['senha_anam']);
+                return $usuario;
+            }
+            return false;
+        } catch (PDOException $e) {
+            error_log("Erro ao verificar identidade: " . $e->getMessage());
             return false;
         }
-        $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
-        // Verificação segura da senha
-        if (password_verify($senha, $usuario['senha_anam'])) {
-            // Remove a senha antes de retornar
-            unset($usuario['senha_anam']);
-            return $usuario;
-        }
-        return false;
-    } catch (PDOException $e) {
-        error_log("Erro ao verificar identidade: " . $e->getMessage());
-        return false;
     }
-}
-public function verificarPsico(){
-if ($_SERVER['REQUEST_METHOD'] === 'POST' &&  (isset($_POST['botLogin']))) {
-        $email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
-        $senha = $_POST['senha'] ?? '';
-        if (empty($email) || empty($senha)) {
-            $_SESSION['erro_login'] = "Preencha todos os campos!";
-            header('Location: '.filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
-            exit;
-        }
-        if ($usuario = $this->verificarIdentidade($email, $senha)) {
-            $_SESSION['logado'] = true;
-            $_SESSION['usuario'] = [
-                'id' => $usuario['cd_anam'],  // Importante para identificar o usuário
-                'email' => $usuario['email_anam'],
-                'crp' => $usuario['cd_crp_anam_chefe'],
-                'nome' => $usuario['nome_anam'],
-                'cpf' => $usuario['cd_cpf_anam_chefe']
-            ];
-            setcookie('logado', 'true', [
-                'expires' => time() + (30 * 60),
-                'path' => '/',
-                'domain' => 'lucianavenanciopsipp.com.br/index.php', // seu domínio aqui
-                'secure' => true,
-                'httponly' => true,
-                'samesite' => 'Strict'
-            ]);
-            setcookie('usuario_id', $usuario['cd_anam'], time() + (30 * 60), '/');
-            // Redirecionamento seguro
-            header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
-            exit;
-        } else {
-            $_SESSION['erro_login'] = "E-mail ou senha incorretos!";
-            header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
-            exit;
+    public function verificarPsico()
+    {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['botLogin']))) {
+            $email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
+            $senha = $_POST['senha'] ?? '';
+            if (empty($email) || empty($senha)) {
+                $_SESSION['erro_login'] = "Preencha todos os campos!";
+                header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
+                exit;
+            }
+            if ($usuario = $this->verificarIdentidade($email, $senha)) {
+                $_SESSION['usuario'] = [
+                    'id' => $usuario['cd_anam'],  // Importante para identificar o usuário
+                    'email' => $usuario['email_anam'],
+                    'crp' => $usuario['cd_crp_anam_chefe'],
+                    'nome' => $usuario['nome_anam'],
+                    'cpf' => $usuario['cd_cpf_anam_chefe']
+                ];
+                setcookie('logado', 'true', [
+                    'expires' => time() + (30 * 60),
+                    'path' => '/',
+                    'domain' => 'lucianavenanciopsipp.com.br', // seu domínio aqui
+                    'secure' => true,
+                    'httponly' => true,
+                    'samesite' => 'Strict'
+                ]);
+                setcookie('usuario_id', $usuario['cd_anam'], time() + (30 * 60), '/');
+                // Redirecionamento seguro
+                header('Location: ' . strtok($_SERVER['PHP_SELF'], '?')); // Remove parâmetros da URL
+                exit();
+            } else {
+                $_SESSION['erro_login'] = "E-mail ou senha incorretos!";
+                header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
+                exit;
+            }
         }
     }
-}
-private function processarLogout() {
-    if (isset($_GET['logout'])) {
-        // Limpa os cookies
-        setcookie('logado', '', time() - 3600, '/');
-        setcookie('usuario_id', '', time() - 3600, '/'); 
-        // Destrói a sessão
-        session_unset();
-        session_destroy();
-        header("Location: ".$_SERVER['PHP_SELF']);
-        exit();
+    private function processarLogout()
+    {
+        if (isset($_GET['logout'])) {
+            // Limpa os cookies
+            setcookie('logado', '', time() - 3600, '/');
+            setcookie('usuario_id', '', time() - 3600, '/');
+            // Destrói a sessão
+            session_unset();
+            session_destroy();
+            header("Location: " . $_SERVER['PHP_SELF']);
+            exit();
+        }
     }
-}
-public function exibirBotoesAuth() {
-    return '<div class="auth-buttons" style="position: static; margin-left: auto;">' . 
-           (isset($_SESSION['usuario']) ? $this->botaoLogout() : $this->botaoLogin()) . 
-           '</div>';
-}
-private function botaoLogin() {
-    return '<button class="btn btn-outline-primary" onclick="abrirModal()">
+    public function exibirBotoesAuth()
+    {
+        return '<div class="auth-buttons" style="position: static; margin-left: auto;">' .
+        (isset($_SESSION['usuario']) ? $this->botaoLogout() : $this->botaoLogin()) .
+            '</div>';
+    }
+    private function botaoLogin()
+    {
+        return '<button class="btn btn-outline-primary" onclick="abrirModal()">
     <i class="bi bi-box-arrow-in-right"></i> Login</button>';
-}
-private function botaoLogout() {
-    return '<button class="btn btn-outline-primary" onclick="window.location.href=\'?logout=1\'">
+    }
+    private function botaoLogout()
+    {
+        return '<button class="btn btn-outline-primary" onclick="window.location.href=\'?logout=1\'">
             <i class="bi bi-box-arrow-right"></i> Sair
             </button>';
-}
-
-public function exibirModalLogin() {
-    $html = '
+    }
+    public function exibirModalLogin()
+    {
+        $html = '
     <div id="loginModal" class="modal">
         <div class="modal-content">
             <h2>Login</h2>';
-            
-    if (isset($_SESSION['erro_login'])) {
-        $html .= '<p class="erro">'.$_SESSION['erro_login'].'</p>';
-        unset($_SESSION['erro_login']);
-    }
-
-    $html .= '
+        if (isset($_SESSION['erro_login'])) {
+            $html .= '<p class="erro">' . $_SESSION['erro_login'] . '</p>';
+            unset($_SESSION['erro_login']);
+        }
+        $html .= '
             <form method="POST" action="">
                 <div class="mb-3">
                     <label for="email" class="form-label">Email:</label>
@@ -678,9 +715,8 @@ public function exibirModalLogin() {
         </div>
     </div>
     <div id="modalOverlay" class="overlay"></div>';
-    
-    return $html;
-}
+        return $html;
+    }
 }
 
 

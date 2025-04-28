@@ -9,6 +9,8 @@ require_once 'C:/xampp/htdocs/TiaLu/processa/processa_Site.php';
 
 $psi = new Psicologa();
 $vali = new Vali();
+$paci = new Paciente();
+
 if (isset($_SESSION['usuario'])) {
     $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
     $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
@@ -24,6 +26,12 @@ if (isset($_SESSION['usuario'])) {
     $cdUsuario = 'Código não encontrado';
 }
 
+$displayStyle = empty($_SESSION['resultado_consulta']) ? 'style="display: none;"' : '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nome_paciente'])) {
+    $resultado = $paci->veriPaciente();
+    $_SESSION['resultado_consulta'] = $resultado;
+}
 
 $paginaHTML = <<<HTML
     <!DOCTYPE html>
@@ -132,6 +140,11 @@ body {
 }
 
 /* Container dos botões */
+.modal .btn-primary {
+    background-color: #4a6baf;
+    border-color: #4a6baf;
+}
+
 .modal-buttons {
     display: flex;
     justify-content: center; /* Centraliza horizontalmente */
@@ -148,7 +161,8 @@ body {
     transition: all 0.2s ease;
     flex: 1; /* Faz os botões terem mesma largura */
     max-width: 150px; /* Largura máxima */
-}
+} max-width: 150px; /* Largura máxima */
+
 
 .modal .btn-primary {
     background-color: #4a6baf;
@@ -279,6 +293,18 @@ body.modal-open {
     }
 }
         }
+        @media (max-width: 374px) {
+    .modal .btn {
+        padding: 8px 15px; /* Reduz o padding */
+        max-width: 120px; /* Reduz a largura máxima */
+        font-size: 14px; /* Opcional: reduz o tamanho da fonte */
+    }
+    
+    .modal-buttons {
+        gap: 10px; /* Reduz o espaço entre botões */
+        padding-top: 15px;
+    }
+}
     </style>
 </head>
 <body>
@@ -319,7 +345,7 @@ body.modal-open {
         </div>
         <!-- Formulário de Atestado (visível por padrão) -->
         <div id="atestado-content" class="document-content active">
-            <form id="atestado-form" method="post" action="">
+            <form id="atestado-form" method="post" action="processa/processa_Site.php">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente" class="form-label">Nome do Paciente:</label>
@@ -364,7 +390,7 @@ body.modal-open {
         </div>
         <!-- Formulário de Comparecimento (oculto por padrão) -->
         <div id="comparecimento-content" class="document-content">
-            <form id="comparecimento-form" method="post" action="">
+            <form id="comparecimento-form" method="post" action="processa/processa_Site.php">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
@@ -404,7 +430,7 @@ body.modal-open {
             </form>
         </div>
         <div id="recibo-content" class="document-content">
-        <form id="recibo-form" method="post" action="">
+        <form id="recibo-form" method="post" action="processa/processa_Site.php">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
@@ -429,7 +455,7 @@ body.modal-open {
             </form>        
         </div>
         <div id="consulta-content" class="document-content">
-    <form id="consulta-form" method="post" action="">
+    <form id="consulta-form" method="post" action="#">
         <div class="row g-3">
             <div class="col-12">
                 <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
@@ -447,14 +473,14 @@ body.modal-open {
             </div>
         </div>
     </form>
-    <div id="resultado-consulta" class="mt-4" style="display: none;">
+    <div id="resultado-consulta" class="mt-4" {$displayStyle}>
         <div class="card">
             <div class="card-header bg-primary text-white">
                 <h5 class="card-title mb-0">Dados do Paciente</h5>
             </div>
             <div class="card-body">
                 <div class="row" id="dados-paciente">
-                    <!-- Os dados serão inseridos aqui via JavaScript/PHP -->
+                    {$paci->resulConsulta()}
                 </div>
             </div>
         </div>
@@ -468,6 +494,15 @@ body.modal-open {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
+        document.addEventListener("DOMContentLoaded", function() {
+    // Mostra a div de resultados quando houver conteúdo
+    if (document.getElementById("dados-paciente").innerHTML.trim() !== '') {
+        document.getElementById("resultado-consulta").style.display = "block";
+    }
+});
+
+
+
       function showDocument(documentType) {
     // Esconde todos os conteúdos
     document.querySelectorAll('.document-content').forEach(content => {
