@@ -1,16 +1,14 @@
 <?php
 // 1. INICIAR SESSÃO (DEVE SER SEMPRE A PRIMEIRA LINHA)
 ob_start();
-
+session_start(); 
 // 2. INCLUIR DEPENDÊNCIAS
-require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
-require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
-require_once 'C:/xampp/htdocs/TiaLu/processa/processa_Site.php';
+require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/conexao.php';
+require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/funcoes.php';
+require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/processa/processa_Site.php';
 
 $psi = new Psicologa();
-$vali = new Vali();
-$paci = new Paciente();
-$pdf = new ProcessaPdfs();
+$vali = new Vali(); // Verifique se a classe Vali também existe!
 
 if (isset($_SESSION['usuario'])) {
     $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
@@ -27,55 +25,90 @@ if (isset($_SESSION['usuario'])) {
     $cdUsuario = 'Código não encontrado';
 }
 
-$displayStyle = empty($_SESSION['resultado_consulta']) ? 'style="display: none;"' : '';
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+function consultaPaciente($nome)
+{
     try {
-        if (isset($_POST["gerar_recibo"])) {
-            // Verifica se o objeto PDF existe e tem o método
-            if (isset($pdf) && method_exists($pdf, 'gerarRecibo')) {
-                $pdf->gerarRecibo();
-                exit;
-            } else {
-                throw new Exception("Módulo de PDF não disponível");
-            }      
-        } elseif (isset($_POST["gerar_comparecimento"])) {
-            if (isset($pdf) && method_exists($pdf, 'gerarComparecimento')) {
-                $pdf->gerarComparecimento();
-                exit;
-            } else {
-                throw new Exception("Módulo de PDF não disponível");
-            }           
-        } elseif (isset($_POST['gerar_atestado'])) {
-            if (isset($pdf) && method_exists($pdf, 'gerarAtestado')) {
-                $pdf->gerarAtestado();
-                exit;
-            } else {
-                throw new Exception("Módulo de PDF não disponível");
-            }       
-        } elseif (isset($_POST['consul_paci'])) {
-            if (isset($paci) && method_exists($paci, 'veriPaciente')) {
-                $paci->veriPaciente();
-                exit;
-            } else {
-                throw new Exception("Módulo de paciente não disponível");
-            }   
-        } else {
-            // Redireciona para a página principal se nenhum botão conhecido foi pressionado
-            echo"Opção não encontrada!";
-            exit;
-        }   
-    } catch (Exception $e) {
-        // Log do erro e redirecionamento seguro
-        error_log("Erro no processamento do formulário: " . $e->getMessage());
-        $_SESSION['erro'] = "Ocorreu um erro ao processar sua requisição";
-        header('Location: SiteLu.php');
+        $conn = Conexao::getConnection();
+        $stmt = $conn->prepare("SELECT * 
+                               FROM anamnese
+                               WHERE nome_completo = :nome
+                               LIMIT 1");
+        $stmt->bindParam(':nome', $nome);
+        $stmt->execute();
+        if ($stmt->rowCount() === 0) {
+            return false;
+        }
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro ao verificar identidade: " . $e->getMessage());
+        return false;
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    
+     if (isset($_POST['consul_paci']) && isset($_SESSION['logado']) && !empty($usuario['id'])) {
+        $nomeConsul = trim($_POST['nome_paciente']); // Remove espaços extras
+        $nomeConsul = filter_var($nomeConsul, FILTER_SANITIZE_STRING);
+        $dadosPaciente = consultaPaciente($nomeConsul);
+        $_SESSION['resultado_consulta'] = [
+            'dados' => $dadosPaciente,
+            'nome_buscado' => $nomeConsul
+        ];
+      header('Location: ' . htmlspecialchars($_SERVER['PHP_SELF']));
         exit;
     }
 }
-if (!empty($_SESSION['erro'])) {
-    echo '<div class="alert alert-danger">'.htmlspecialchars($_SESSION['erro']).'</div>';
-    unset($_SESSION['erro']);
+if (!empty($_SESSION['resultado_consulta'])) {
+    $dadosPaciente = $_SESSION['resultado_consulta']['dados'];
+    $nomeConsul = $_SESSION['resultado_consulta']['nome_buscado'];
+    // Limpa o resultado da sessão imediatamente após pegar os dados
+    unset($_SESSION['resultado_consulta']);
+    if ($dadosPaciente !== false) {
+        echo '<script>
+            document.addEventListener("DOMContentLoaded", function() {
+                const container = document.getElementById("dados-paciente");
+                const resultadoDiv = document.getElementById("resultado-consulta");
+                
+                // Configurações iniciais
+                resultadoDiv.style.display = "block";
+                container.innerHTML = "";
+                
+                // Cria as linhas de dados
+                let html = \'\';';
+        foreach ($dadosPaciente as $campo => $valor) {
+            if (!empty($valor)) {
+                $campoFormatado = ucfirst(str_replace('_', ' ', $campo));
+                $valorSanitizado = htmlspecialchars($valor, ENT_QUOTES, 'UTF-8');
+
+                echo 'html += `<div class="col-md-6 mb-3">
+                            <div class="dados-item">
+                                <strong class="d-block text-muted small">' . $campoFormatado . '</strong>
+                                <span class="d-block">' . $valorSanitizado . '</span>
+                            </div>
+                        </div>`;';
+            }
+        }
+        echo 'if(html === \'\') {
+                    container.innerHTML = `<div class="col-12">
+                        <div class="alert alert-info">Paciente encontrado, mas nenhum dado preenchido.</div>
+                    </div>`;
+                } else {
+                    container.innerHTML = html;
+                }
+            });
+            </script>';
+    } else {
+        echo '<script>
+            document.addEventListener("DOMContentLoaded", function() {
+                const container = document.getElementById("dados-paciente");
+                container.innerHTML = `<div class="col-12">
+                    <div class="alert alert-warning">Nenhum paciente encontrado com o nome ' . htmlspecialchars($nomeConsul, ENT_QUOTES, 'UTF-8') . '</div>
+                </div>`;
+                document.getElementById("resultado-consulta").style.display = "block";
+            });
+            </script>';
+    }
 }
 
 $paginaHTML = <<<HTML
@@ -84,17 +117,17 @@ $paginaHTML = <<<HTML
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TiaLu - Site</title>
+    <title>Luciana Venâncio</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-body {
-    background-image: url('img/marcaDaguaLu.png');
-    background-size: 390px; /* Largura fixa (altura proporcional) */
-    background-repeat: no-repeat;
-    background-position: center calc(100% - 0px);  /* 50px acima do rodapé */    background-attachment: fixed;
-}
+// body {
+//     background-image: url('img/marcaDaguaLu.png');
+//     background-size: 390px; /* Largura fixa (altura proporcional) */
+//     background-repeat: no-repeat;
+//     background-position: center calc(100% + 100px);  /* 50px acima do rodapé */    background-attachment: fixed;
+// }
       /* Estilos da Navbar */
       .navbar-custom {
             background-color: rgba(135, 150, 99, 0.84);
@@ -105,7 +138,7 @@ body {
             width: auto;
             transition: all 0.3s ease;
         }
-        .welcome-text {
+          .welcome-text {
             font-size: 1.2rem;
             font-weight: 500;
             color: #333;
@@ -131,6 +164,20 @@ body {
             border-bottom: 3px solid transparent;
             transition: all 0.3s ease;
         }
+        
+        .mensagem-erro {
+    font-size: 0.8em;
+    margin-top: 5px;
+}
+
+.invalido {
+    border-color: red;
+}
+
+.valido {
+    border-color: green;
+}
+
         .document-tab:hover {
             background-color: rgba(13, 110, 253, 0.1);
         }
@@ -157,8 +204,7 @@ body {
             flex: 1 1 150px;
             background-color: rgba(135, 150, 99, 0.84);
         }
-        
-.modal {
+        .modal {
     display: none;
     position: fixed;
     top: 50%;
@@ -244,19 +290,6 @@ body {
     border: 1px solid #ced4da;
 }
 
-.mensagem-erro {
-    font-size: 0.8em;
-    margin-top: 5px;
-}
-
-.invalido {
-    border-color: red;
-}
-
-.valido {
-    border-color: green;
-}
-
 /* Overlay */
 .overlay {
     display: none;
@@ -332,6 +365,12 @@ body.modal-open {
             .welcome-text {
                 display: none;
             }
+            body {
+    background-image: url('img/marcaDaguaLu.png');
+    background-size: 280px; /* Largura fixa (altura proporcional) */
+    background-repeat: no-repeat;
+    background-position: center calc(100% + 55px);  /* 50px acima do rodapé */    background-attachment: fixed;
+}
             .navbar-brand img {
                 height: 25px;
             }
@@ -344,14 +383,12 @@ body.modal-open {
                 padding: 10px 5px;
                 font-size: 0.85rem;
             }
-            @media (max-width: 576px) {
-    .modal {
+            .modal {
         width: 95%;
         padding: 15px;
     }
-}
         }
-        @media (max-width: 374px) {
+           @media (max-width: 374px) {
     .modal .btn {
         padding: 8px 15px; /* Reduz o padding */
         max-width: 120px; /* Reduz a largura máxima */
@@ -367,9 +404,8 @@ body.modal-open {
 </head>
 <body>
     <!-- Navbar Responsiva -->
-    <nav class="navbar navbar-expand-lg navbar-custom py-2 py-lg-3">
+     <nav class="navbar navbar-expand-lg navbar-custom py-2 py-lg-3">
         <div class="container-fluid">
-            
             
             <div class="welcome-text mx-auto d-none d-sm-flex">
                 Seja bem-vinda, {$nomeUsuario}
@@ -382,8 +418,7 @@ body.modal-open {
   </div>
         </div>
     </nav>
-    
-    
+  
     <!-- Container Principal -->
     <div class="container mt-3 mt-md-4">
         <!-- Abas de Documentos Responsivas -->
@@ -403,7 +438,7 @@ body.modal-open {
         </div>
         <!-- Formulário de Atestado (visível por padrão) -->
         <div id="atestado-content" class="document-content active">
-            <form id="atestado-form" method="post" action="">
+            <form id="atestado-form" method="post" action="processa/processa_Site.php">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente" class="form-label">Nome do Paciente:</label>
@@ -448,7 +483,7 @@ body.modal-open {
         </div>
         <!-- Formulário de Comparecimento (oculto por padrão) -->
         <div id="comparecimento-content" class="document-content">
-            <form id="comparecimento-form" method="post" action="">
+            <form id="comparecimento-form" method="post" action="processa/processa_Site.php">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
@@ -488,7 +523,7 @@ body.modal-open {
             </form>
         </div>
         <div id="recibo-content" class="document-content">
-        <form id="recibo-form" method="post" action="">
+        <form id="recibo-form" method="post" action="processa/processa_Site.php">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
@@ -531,36 +566,27 @@ body.modal-open {
             </div>
         </div>
     </form>
-    <div id="resultado-consulta" class="mt-4" {$displayStyle}>
+    <div id="resultado-consulta" class="mt-4" style="display: none;">
         <div class="card">
             <div class="card-header bg-primary text-white">
                 <h5 class="card-title mb-0">Dados do Paciente</h5>
             </div>
             <div class="card-body">
                 <div class="row" id="dados-paciente">
-                    {$paci->resulConsulta()}
+                    <!-- Os dados serão inseridos aqui via JavaScript/PHP -->
                 </div>
             </div>
         </div>
     </div>
 </div>
   </div>
-
-  {$psi->exibirModalLogin()}
+  
+    {$psi->exibirModalLogin()}
 
     <!-- Bootstrap JS Bundle + Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-    // Mostra a div de resultados quando houver conteúdo
-    if (document.getElementById("dados-paciente").innerHTML.trim() !== '') {
-        document.getElementById("resultado-consulta").style.display = "block";
-    }
-});
-
-
-
       function showDocument(documentType) {
     // Esconde todos os conteúdos
     document.querySelectorAll('.document-content').forEach(content => {
@@ -604,7 +630,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (firstContent) firstContent.classList.add('active');
         }
     }
-});    
+});     
 
 function validarCPF(input) {
     // Obtém o valor do campo
@@ -686,3 +712,4 @@ HTML;
 
 echo $paginaHTML;
 
+?>

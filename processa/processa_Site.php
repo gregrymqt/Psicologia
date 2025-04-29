@@ -1,7 +1,6 @@
 <?php
 // 1. INICIAR SESSÃO (DEVE SER SEMPRE A PRIMEIRA LINHA)
 ob_start();
-session_start();
 // 2. INCLUIR DEPENDÊNCIAS
 require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
 require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
@@ -10,116 +9,7 @@ require_once __DIR__ . '/../vendor/autoload.php'; // ou o caminho correto$vali =
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
-$paci = new Paciente();
-$pdf = new ProcessaPdfs();
-
-
-
-class Paciente
-{
-    public static function consultaPaciente($nome)
-    {
-        try {
-            $conn = Conexao::getConnection();
-            $stmt = $conn->prepare("SELECT * 
-                                   FROM anamnese
-                                   WHERE nome_completo = :nome
-                                   LIMIT 1");
-            $stmt->bindParam(':nome', $nome);
-            $stmt->execute();
-            if ($stmt->rowCount() === 0) {
-                return false;
-            }
-            return $stmt->fetch(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            error_log("Erro ao verificar identidade: " . $e->getMessage());
-            return false;
-        }
-    }
-    public function veriPaciente()
-    {
-        if (
-            isset($_POST['consul_paci']) &&
-            !empty($_SESSION['logado']) &&
-            !empty($_SESSION['usuario']['id'])
-        ) {
-            
-            $nomeConsul = htmlspecialchars(trim($_POST['nome_paciente']), ENT_QUOTES, 'UTF-8');
-
-            if (empty($nomeConsul) || strlen($nomeConsul) < 3) {
-                $_SESSION['resultado_consulta'] = [
-                    'dados' => false,
-                    'nome_buscado' => $nomeConsul
-                ];
-                header('Location: ' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'));
-                exit;
-            }
-            $_SESSION['resultado_consulta'] = [
-                'dados' => self::consultaPaciente($nomeConsul),
-                'nome_buscado' => $nomeConsul
-            ];
-            exit;
-        }
-    }
-    public function resulConsulta()
-    {
-        if (empty($_SESSION['resultado_consulta'])) return;
-
-        $resultado = $_SESSION['resultado_consulta'];
-        unset($_SESSION['resultado_consulta']);
-
-        if ($resultado['dados'] === false) {
-            echo '<div class="alert alert-warning">Nenhum paciente encontrado</div>';
-            return;
-        }
-            if ($resultado['dados'] !== false) {
-                echo '<script>
-                    document.addEventListener("DOMContentLoaded", function() {
-                        const container = document.getElementById("dados-paciente");
-                        const resultadoDiv = document.getElementById("resultado-consulta");
-                        
-                        // Configurações iniciais
-                        resultadoDiv.style.display = "block";
-                        container.innerHTML = "";
-                        
-                        // Cria as linhas de dados
-                        let html = \'\';';
-                foreach ($resultado['dados'] as $campo => $valor) {
-                    if (!empty($valor)) {
-                        $campoFormatado = ucfirst(str_replace('_', ' ', $campo));
-                        $valorSanitizado = htmlspecialchars($valor, ENT_QUOTES, 'UTF-8');
-        
-                        echo 'html += `<div class="col-md-6 mb-3">
-                                    <div class="dados-item">
-                                        <strong class="d-block text-muted small">' . $campoFormatado . '</strong>
-                                        <span class="d-block">' . $valorSanitizado . '</span>
-                                    </div>
-                                </div>`;';
-                    }
-                }
-                echo 'if(html === \'\') {
-                            container.innerHTML = `<div class="col-12">
-                                <div class="alert alert-info">Paciente encontrado, mas nenhum dado preenchido.</div>
-                            </div>`;
-                        } else {
-                            container.innerHTML = html;
-                        }
-                    });
-                    </script>';
-            } else {
-                echo '<script>
-                    document.addEventListener("DOMContentLoaded", function() {
-                        const container = document.getElementById("dados-paciente");
-                        container.innerHTML = `<div class="col-12">
-                            <div class="alert alert-warning">Nenhum paciente encontrado com o nome ' . htmlspecialchars($resultado['nome_buscado'], ENT_QUOTES, 'UTF-8') . '</div>
-                        </div>`;
-                        document.getElementById("resultado-consulta").style.display = "block";
-                    });
-                    </script>';
-            }
-        }}
-
-
+// $paci = new Paciente();
 
 
 
@@ -140,7 +30,7 @@ class ProcessaPdfs
         ini_set('display_startup_errors', 1);
         error_reporting(E_ALL);
         // 2. Caminho da imagem
-        $this->logoPath = 'c:/xampp/htdocs/TiaLu/img/marcaDaguaLu.jpeg';
+        $this->logoPath = 'C:/xampp/htdocs/TiaLu/img/marcaDaguaLu.jpeg';
         // 3. Verificações robustas
         if (!file_exists($this->logoPath)) {
             die("ERRO: Imagem não encontrada em: " . realpath($this->logoPath));
@@ -573,8 +463,8 @@ class Psicologa
 {
     public function __construct()
     {
-        if (isset($_COOKIE['logado']) && $_COOKIE['logado'] === 'true' && !isset($_SESSION['logado'])) {
-            $_SESSION['logado'] = true;
+        if (isset($_COOKIE['usuario']) && $_COOKIE['usuario'] === 'true' && !isset($_SESSION['usuario'])) {
+            $_SESSION['usuario'] = true;
             // Você pode querer recarregar os dados do usuário aqui
         }
         $this->verificarPsico();
