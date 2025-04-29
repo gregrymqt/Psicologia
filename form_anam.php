@@ -56,6 +56,19 @@ $dados_form = $_POST ?? [];
   margin-top: 30px;
   margin-bottom: 20px;
 }
+.mensagem-erro {
+    font-size: 0.8em;
+    margin-top: 5px;
+}
+
+.invalido {
+    border-color: red;
+}
+
+.valido {
+    border-color: green;
+}
+
 
 .required-field::after {
   content: " *";
@@ -231,8 +244,9 @@ $dados_form = $_POST ?? [];
 
                         <div class="col-md-4">
                             <label for="cpf" class="form-label required-field">CPF do paciente</label>
-                            <input type="text" class="form-control" id="cpf" name="cpf"
-                                value="<?= escape($dados_form['cpf'] ?? '') ?>" required>
+                            <input type="text" class="form-control" onblur="validarCPF(this)" id="cpf" name="cpf"  
+                            value="<?= escape($dados_form['cpf'] ?? '') ?>" required>
+                            <div id="cpf-mensagem" class="mensagem-erro"></div>                                
                         </div>
                     </div>
                 </div>
@@ -408,6 +422,68 @@ $dados_form = $_POST ?? [];
                 $('#idade').trigger('change');
             });
         });
+
+        function validarCPF(input) {
+    // Obtém o valor do campo
+    const cpf = input.value;
+    
+    // Remove caracteres não numéricos
+    const cpfLimpo = cpf.replace(/\D/g, '');
+    
+    // Verifica se tem 11 dígitos ou se é uma sequência de dígitos iguais
+    if (cpfLimpo.length !== 11 || /^(\d)\1{10}$/.test(cpfLimpo)) {
+        mostrarErro(input, 'CPF inválido');
+        return false;
+    }
+    
+    // Validação do primeiro dígito verificador
+    let soma = 0;
+    for (let i = 0; i < 9; i++) {
+        soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
+    }
+    let resto = (soma * 10) % 11;
+    resto = resto === 10 ? 0 : resto;
+    if (resto !== parseInt(cpfLimpo.charAt(9))) {
+        mostrarErro(input, 'CPF inválido');
+        return false;
+    }
+    
+    // Validação do segundo dígito verificador
+    soma = 0;
+    for (let i = 0; i < 10; i++) {
+        soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
+    }
+    resto = (soma * 10) % 11;
+    resto = resto === 10 ? 0 : resto;
+    if (resto !== parseInt(cpfLimpo.charAt(10))) {
+        mostrarErro(input, 'CPF inválido');
+        return false;
+    }
+    
+    // Formata e mostra como válido
+    input.value = formatarCPF(cpfLimpo);
+    mostrarErro(input, '', true);
+    return true;
+}
+
+function formatarCPF(cpf) {
+    return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+function mostrarErro(input, mensagem, valido = false) {
+    const mensagemElemento = document.getElementById('cpf-mensagem');
+    mensagemElemento.textContent = mensagem;
+    
+    if (valido) {
+        input.classList.remove('invalido');
+        input.classList.add('valido');
+        mensagemElemento.style.color = 'green';
+    } else {
+        input.classList.remove('valido');
+        input.classList.add('invalido');
+        mensagemElemento.style.color = 'red';
+    }
+}
     </script>
 </body>
 </html>

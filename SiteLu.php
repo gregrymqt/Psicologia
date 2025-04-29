@@ -10,6 +10,7 @@ require_once 'C:/xampp/htdocs/TiaLu/processa/processa_Site.php';
 $psi = new Psicologa();
 $vali = new Vali();
 $paci = new Paciente();
+$pdf = new ProcessaPdfs();
 
 if (isset($_SESSION['usuario'])) {
     $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
@@ -28,9 +29,53 @@ if (isset($_SESSION['usuario'])) {
 
 $displayStyle = empty($_SESSION['resultado_consulta']) ? 'style="display: none;"' : '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nome_paciente'])) {
-    $resultado = $paci->veriPaciente();
-    $_SESSION['resultado_consulta'] = $resultado;
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    try {
+        if (isset($_POST["gerar_recibo"])) {
+            // Verifica se o objeto PDF existe e tem o método
+            if (isset($pdf) && method_exists($pdf, 'gerarRecibo')) {
+                $pdf->gerarRecibo();
+                exit;
+            } else {
+                throw new Exception("Módulo de PDF não disponível");
+            }      
+        } elseif (isset($_POST["gerar_comparecimento"])) {
+            if (isset($pdf) && method_exists($pdf, 'gerarComparecimento')) {
+                $pdf->gerarComparecimento();
+                exit;
+            } else {
+                throw new Exception("Módulo de PDF não disponível");
+            }           
+        } elseif (isset($_POST['gerar_atestado'])) {
+            if (isset($pdf) && method_exists($pdf, 'gerarAtestado')) {
+                $pdf->gerarAtestado();
+                exit;
+            } else {
+                throw new Exception("Módulo de PDF não disponível");
+            }       
+        } elseif (isset($_POST['consul_paci'])) {
+            if (isset($paci) && method_exists($paci, 'veriPaciente')) {
+                $paci->veriPaciente();
+                exit;
+            } else {
+                throw new Exception("Módulo de paciente não disponível");
+            }   
+        } else {
+            // Redireciona para a página principal se nenhum botão conhecido foi pressionado
+            echo"Opção não encontrada!";
+            exit;
+        }   
+    } catch (Exception $e) {
+        // Log do erro e redirecionamento seguro
+        error_log("Erro no processamento do formulário: " . $e->getMessage());
+        $_SESSION['erro'] = "Ocorreu um erro ao processar sua requisição";
+        header('Location: SiteLu.php');
+        exit;
+    }
+}
+if (!empty($_SESSION['erro'])) {
+    echo '<div class="alert alert-danger">'.htmlspecialchars($_SESSION['erro']).'</div>';
+    unset($_SESSION['erro']);
 }
 
 $paginaHTML = <<<HTML
@@ -161,7 +206,7 @@ body {
     transition: all 0.2s ease;
     flex: 1; /* Faz os botões terem mesma largura */
     max-width: 150px; /* Largura máxima */
-} max-width: 150px; /* Largura máxima */
+} 
 
 
 .modal .btn-primary {
@@ -197,6 +242,19 @@ body {
     padding: 12px;
     border-radius: 6px;
     border: 1px solid #ced4da;
+}
+
+.mensagem-erro {
+    font-size: 0.8em;
+    margin-top: 5px;
+}
+
+.invalido {
+    border-color: red;
+}
+
+.valido {
+    border-color: green;
 }
 
 /* Overlay */
@@ -345,7 +403,7 @@ body.modal-open {
         </div>
         <!-- Formulário de Atestado (visível por padrão) -->
         <div id="atestado-content" class="document-content active">
-            <form id="atestado-form" method="post" action="processa/processa_Site.php">
+            <form id="atestado-form" method="post" action="">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente" class="form-label">Nome do Paciente:</label>
@@ -390,7 +448,7 @@ body.modal-open {
         </div>
         <!-- Formulário de Comparecimento (oculto por padrão) -->
         <div id="comparecimento-content" class="document-content">
-            <form id="comparecimento-form" method="post" action="processa/processa_Site.php">
+            <form id="comparecimento-form" method="post" action="">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
@@ -430,7 +488,7 @@ body.modal-open {
             </form>
         </div>
         <div id="recibo-content" class="document-content">
-        <form id="recibo-form" method="post" action="processa/processa_Site.php">
+        <form id="recibo-form" method="post" action="">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
@@ -438,8 +496,8 @@ body.modal-open {
                     </div>
                     <div class="col-md-4">
                             <label for="cpf" class="form-label required-field">CPF do paciente</label>
-                            <input type="text" class="form-control" id="cpf" name="cpf"
-                                required>
+                            <input type="text" class="form-control" onblur="validarCPF(this)" id="cpf" name="cpf" required>
+                            <div id="cpf-mensagem" class="mensagem-erro"></div>
                         </div>
                         <div class="col-12 mt-2">
                         <div class="btn-group">
@@ -455,7 +513,7 @@ body.modal-open {
             </form>        
         </div>
         <div id="consulta-content" class="document-content">
-    <form id="consulta-form" method="post" action="#">
+    <form id="consulta-form" method="post" action="">
         <div class="row g-3">
             <div class="col-12">
                 <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
@@ -546,7 +604,70 @@ document.addEventListener('DOMContentLoaded', function () {
             if (firstContent) firstContent.classList.add('active');
         }
     }
-});            
+});    
+
+function validarCPF(input) {
+    // Obtém o valor do campo
+    const cpf = input.value;
+    
+    // Remove caracteres não numéricos
+    const cpfLimpo = cpf.replace(/\D/g, '');
+    
+    // Verifica se tem 11 dígitos ou se é uma sequência de dígitos iguais
+    if (cpfLimpo.length !== 11 || /^(\d)\1{10}$/.test(cpfLimpo)) {
+        mostrarErro(input, 'CPF inválido');
+        return false;
+    }
+    
+    // Validação do primeiro dígito verificador
+    let soma = 0;
+    for (let i = 0; i < 9; i++) {
+        soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
+    }
+    let resto = (soma * 10) % 11;
+    resto = resto === 10 ? 0 : resto;
+    if (resto !== parseInt(cpfLimpo.charAt(9))) {
+        mostrarErro(input, 'CPF inválido');
+        return false;
+    }
+    
+    // Validação do segundo dígito verificador
+    soma = 0;
+    for (let i = 0; i < 10; i++) {
+        soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
+    }
+    resto = (soma * 10) % 11;
+    resto = resto === 10 ? 0 : resto;
+    if (resto !== parseInt(cpfLimpo.charAt(10))) {
+        mostrarErro(input, 'CPF inválido');
+        return false;
+    }
+    
+    // Formata e mostra como válido
+    input.value = formatarCPF(cpfLimpo);
+    mostrarErro(input, '', true);
+    return true;
+}
+
+function formatarCPF(cpf) {
+    return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+function mostrarErro(input, mensagem, valido = false) {
+    const mensagemElemento = document.getElementById('cpf-mensagem');
+    mensagemElemento.textContent = mensagem;
+    
+    if (valido) {
+        input.classList.remove('invalido');
+        input.classList.add('valido');
+        mensagemElemento.style.color = 'green';
+    } else {
+        input.classList.remove('valido');
+        input.classList.add('invalido');
+        mensagemElemento.style.color = 'red';
+    }
+}
+
 function abrirModal() {
     document.getElementById('loginModal').style.display = 'block';
     document.getElementById('overlay').style.display = 'block';
@@ -565,4 +686,3 @@ HTML;
 
 echo $paginaHTML;
 
-?>

@@ -12,34 +12,19 @@ use Dompdf\Options;
 
 $paci = new Paciente();
 $pdf = new ProcessaPdfs();
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    if (isset($_POST["gerar_recibo"])) {
-        $pdf->gerarRecibo();
-        exit;
-    } elseif (isset($_POST["gerar_comparecimento"])) {
-        $pdf->gerarComparecimento();
-        exit();
-    } elseif (isset($_POST['gerar_atestado'])) {
-        $pdf->gerarAtestado();
-    } elseif (isset($_POST['consul_paci'])) {
-        $paci->veriPaciente();
-
-    } else {
-        header('SiteLu.php');
-    }
-}
 
 
-class Paciente 
+
+class Paciente
 {
-    public function consultaPaciente($nome)
+    public static function consultaPaciente($nome)
     {
         try {
             $conn = Conexao::getConnection();
             $stmt = $conn->prepare("SELECT * 
-                               FROM anamnese
-                               WHERE nome_completo = :nome
-                               LIMIT 1");
+                                   FROM anamnese
+                                   WHERE nome_completo = :nome
+                                   LIMIT 1");
             $stmt->bindParam(':nome', $nome);
             $stmt->execute();
             if ($stmt->rowCount() === 0) {
@@ -53,80 +38,89 @@ class Paciente
     }
     public function veriPaciente()
     {
-        // Verifica se o usuário está logado
-        if (!isset($_SESSION['logado']) || empty($_SESSION['usuario']['id'])) {
-            return false;
-        }
-        // Valida e sanitiza o input
-        if (empty($_POST['nome_paciente'])) {
-            $_SESSION['erro_consulta'] = "Por favor, informe o nome do paciente";
-            header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
-            exit;
-        }   
-        $nomeConsul = trim($_POST['nome_paciente']);
-        $nomeConsul = filter_var($nomeConsul, FILTER_SANITIZE_STRING, FILTER_FLAG_STRIP_LOW);   
-        // Consulta o paciente
-        return [
-            'dados' => $this->consultaPaciente($nomeConsul),
-            'nome_buscado' => $nomeConsul,
-            'timestamp' => time()
-        ];
-    }
-    public function resulConsulta($resultado = null)
-    {
-        // Se nenhum resultado for passado, verifica na sessão
-        if ($resultado === null && isset($_SESSION['resultado_consulta'])) {
-            $resultado = $_SESSION['resultado_consulta'];
-            unset($_SESSION['resultado_consulta']);
-        }
-        // Se ainda não tiver resultado, retorna vazio
-        if (!$resultado) {
-            return '';
-        }
+        if (
+            isset($_POST['consul_paci']) &&
+            !empty($_SESSION['logado']) &&
+            !empty($_SESSION['usuario']['id'])
+        ) {
+            
+            $nomeConsul = htmlspecialchars(trim($_POST['nome_paciente']), ENT_QUOTES, 'UTF-8');
 
-        $nomeBuscado = htmlspecialchars($resultado['nome_buscado'], ENT_QUOTES, 'UTF-8');
+            if (empty($nomeConsul) || strlen($nomeConsul) < 3) {
+                $_SESSION['resultado_consulta'] = [
+                    'dados' => false,
+                    'nome_buscado' => $nomeConsul
+                ];
+                header('Location: ' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'));
+                exit;
+            }
+            $_SESSION['resultado_consulta'] = [
+                'dados' => self::consultaPaciente($nomeConsul),
+                'nome_buscado' => $nomeConsul
+            ];
+            exit;
+        }
+    }
+    public function resulConsulta()
+    {
+        if (empty($_SESSION['resultado_consulta'])) return;
+
+        $resultado = $_SESSION['resultado_consulta'];
+        unset($_SESSION['resultado_consulta']);
 
         if ($resultado['dados'] === false) {
-            return <<<HTML
-            <div class="col-12">
-                <div class="alert alert-warning">
-                    Nenhum paciente encontrado com o nome "{$nomeBuscado}"
-                </div>
-            </div>
-            HTML;
+            echo '<div class="alert alert-warning">Nenhum paciente encontrado</div>';
+            return;
         }
-      
-            $html= '';
-            $temDados = false;
-            foreach ($resultado['dados'] as $campo => $valor) {
-                if (!empty($valor)) {
-                    $temDados = true;
-                    $campoFormatado = ucfirst(str_replace('_', ' ', $campo));
-                    $valorSanitizado = htmlspecialchars($valor, ENT_QUOTES, 'UTF-8');
-
-                    $html .= <<<HTML
-                    <div class="col-md-6 mb-3">
-                        <div class="dados-item">
-                            <strong class="d-block text-muted small">{$campoFormatado}</strong>
-                            <span class="d-block">{$valorSanitizado}</span>
-                        </div>
-                    </div>
-                    HTML;
+            if ($resultado['dados'] !== false) {
+                echo '<script>
+                    document.addEventListener("DOMContentLoaded", function() {
+                        const container = document.getElementById("dados-paciente");
+                        const resultadoDiv = document.getElementById("resultado-consulta");
+                        
+                        // Configurações iniciais
+                        resultadoDiv.style.display = "block";
+                        container.innerHTML = "";
+                        
+                        // Cria as linhas de dados
+                        let html = \'\';';
+                foreach ($resultado['dados'] as $campo => $valor) {
+                    if (!empty($valor)) {
+                        $campoFormatado = ucfirst(str_replace('_', ' ', $campo));
+                        $valorSanitizado = htmlspecialchars($valor, ENT_QUOTES, 'UTF-8');
+        
+                        echo 'html += `<div class="col-md-6 mb-3">
+                                    <div class="dados-item">
+                                        <strong class="d-block text-muted small">' . $campoFormatado . '</strong>
+                                        <span class="d-block">' . $valorSanitizado . '</span>
+                                    </div>
+                                </div>`;';
+                    }
                 }
-            } 
-            if (!$temDados) {
-                return <<<HTML
-                <div class="col-12">
-                    <div class="alert alert-info">
-                        Paciente encontrado, mas nenhum dado preenchido.
-                    </div>
-                </div>
-                HTML;
+                echo 'if(html === \'\') {
+                            container.innerHTML = `<div class="col-12">
+                                <div class="alert alert-info">Paciente encontrado, mas nenhum dado preenchido.</div>
+                            </div>`;
+                        } else {
+                            container.innerHTML = html;
+                        }
+                    });
+                    </script>';
+            } else {
+                echo '<script>
+                    document.addEventListener("DOMContentLoaded", function() {
+                        const container = document.getElementById("dados-paciente");
+                        container.innerHTML = `<div class="col-12">
+                            <div class="alert alert-warning">Nenhum paciente encontrado com o nome ' . htmlspecialchars($resultado['nome_buscado'], ENT_QUOTES, 'UTF-8') . '</div>
+                        </div>`;
+                        document.getElementById("resultado-consulta").style.display = "block";
+                    });
+                    </script>';
             }
-            return $html;
         }}
 
-    
+
+
 
 
 class ProcessaPdfs
@@ -667,7 +661,7 @@ class Psicologa
     public function exibirBotoesAuth()
     {
         return '<div class="auth-buttons" style="position: static; margin-left: auto;">' .
-        (isset($_SESSION['usuario']) ? $this->botaoLogout() : $this->botaoLogin()) .
+            (isset($_SESSION['usuario']) ? $this->botaoLogout() : $this->botaoLogin()) .
             '</div>';
     }
     private function botaoLogin()
