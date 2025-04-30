@@ -1,7 +1,7 @@
 <?php
 // Verifica o caminho absoluto do arquivo
-require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/conexao.php';
-require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/funcoes.php';
+require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
+require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
 // Função auxiliar para simplificar o código
 function escape($value)
 {

@@ -1,7 +1,7 @@
 <?php
 session_start();
-require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/conexao.php';
-require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/funcoes.php';
+require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
+require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
 $vali= new Vali();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' ) {

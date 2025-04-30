@@ -3,12 +3,64 @@
 ob_start();
 session_start();
 // 2. INCLUIR DEPENDÊNCIAS
-require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/conexao.php';
-require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/funcoes.php';
+require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
+require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
 require_once __DIR__ . '/../vendor/autoload.php'; // ou o caminho correto$vali = new Vali();
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
+
+
+class Consulta
+{
+    public function salvarObservacoes($id)
+    {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['salvar_observacoes'])) {
+            try {
+                $conn = Conexao::getConnection();
+                $observacoes = $_POST['observacoes'];
+                $stmt = $conn->prepare("UPDATE anamnese SET observacao_paciente = ? WHERE id_anam = ?");
+                $stmt->execute([$observacoes, $id]);
+
+                $_SESSION['sucesso'] = "Observações atualizadas com sucesso!";
+            } catch (PDOException $e) {
+                $_SESSION['erro'] = "Erro ao atualizar observações: " . $e->getMessage();
+            }
+
+            header("Location: " . $_SERVER['HTTP_REFERER']);
+            exit;
+        }
+    }
+    public function consulpaciente()
+    {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['consul_paci'])) {
+            if (isset($_POST['nome_paciente'])) {
+                $nomePaciente = trim($_POST['nome_paciente']);
+
+                try {
+                    $conn = Conexao::getConnection();
+                    $stmt = $conn->prepare("SELECT * FROM anamnese 
+                          WHERE nome_completo LIKE :nome 
+                          ORDER BY ID DESC 
+                          LIMIT 1");
+                    $stmt->bindValue(':nome', '%' . $nomePaciente . '%');
+                    $stmt->execute();
+
+                    $_SESSION['resultado_consulta'] = $stmt->fetch(PDO::FETCH_ASSOC);
+                    $_SESSION['nome_buscado'] = $nomePaciente;
+
+                } catch (PDOException $e) {
+                    $_SESSION['erro'] = "Erro na consulta: " . $e->getMessage();
+                }
+            } else {
+                $_SESSION['erro'] = "Por favor, informe o nome do paciente";
+            }
+
+            header("Location: " . $_SERVER['PHP_SELF']);
+            exit;
+        }
+    }
+}
 
 
 class ProcessaPdfs
@@ -28,7 +80,7 @@ class ProcessaPdfs
         ini_set('display_startup_errors', 1);
         error_reporting(E_ALL);
         // 2. Caminho da imagem
-        $this->logoPath = '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/img/marcaDaguaLu.jpeg';
+        $this->logoPath = 'C:/xampp/htdocs/TiaLu/img/marcaDaguaLu.jpeg';
         // 3. Verificações robustas
         if (!file_exists($this->logoPath)) {
             die("ERRO: Imagem não encontrada em: " . realpath($this->logoPath));
@@ -189,11 +241,11 @@ class ProcessaPdfs
         // Formatar datas
         $data_nasc_formatada = date("d/m/Y", strtotime($data_nascimento));
         $data_atend_formatada = date("d/m/Y", strtotime($data_atendimento));
-        
-         $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
+
+        $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
         $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
         $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
-    
+
         // Gerar HTML da declaração
         $html = '
     <!DOCTYPE html>
@@ -319,7 +371,7 @@ class ProcessaPdfs
         $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
         $cpf = $_POST['cpf'];
 
-         
+
         $vali = new Vali();
 
         $cpf_paciente = $vali->formatarCPF($cpf);
@@ -333,13 +385,13 @@ class ProcessaPdfs
             ? $veri->valorPorExtenso($valor_consulta)
             : "duzentos e cinquenta reais";
         $valor_formatado = "R$ " . number_format($valor_consulta, 2, ',', '.');
-        
-         $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
+
+        $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
         $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
         $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
         $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastrado', ENT_QUOTES, 'UTF-8');
 
-        
+
         ;
         $html = '
         <!DOCTYPE html>
