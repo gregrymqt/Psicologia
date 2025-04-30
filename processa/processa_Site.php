@@ -1,16 +1,14 @@
 <?php
 // 1. INICIAR SESSÃO (DEVE SER SEMPRE A PRIMEIRA LINHA)
 ob_start();
+session_start();
 // 2. INCLUIR DEPENDÊNCIAS
-require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
-require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
+require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/conexao.php';
+require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/funcoes.php';
 require_once __DIR__ . '/../vendor/autoload.php'; // ou o caminho correto$vali = new Vali();
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
-
-// $paci = new Paciente();
-
 
 
 class ProcessaPdfs
@@ -30,7 +28,7 @@ class ProcessaPdfs
         ini_set('display_startup_errors', 1);
         error_reporting(E_ALL);
         // 2. Caminho da imagem
-        $this->logoPath = 'C:/xampp/htdocs/TiaLu/img/marcaDaguaLu.jpeg';
+        $this->logoPath = '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/img/marcaDaguaLu.jpeg';
         // 3. Verificações robustas
         if (!file_exists($this->logoPath)) {
             die("ERRO: Imagem não encontrada em: " . realpath($this->logoPath));
@@ -191,8 +189,11 @@ class ProcessaPdfs
         // Formatar datas
         $data_nasc_formatada = date("d/m/Y", strtotime($data_nascimento));
         $data_atend_formatada = date("d/m/Y", strtotime($data_atendimento));
-        $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
+        
+         $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
         $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
+        $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
+    
         // Gerar HTML da declaração
         $html = '
     <!DOCTYPE html>
@@ -318,10 +319,7 @@ class ProcessaPdfs
         $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
         $cpf = $_POST['cpf'];
 
-        $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
-        $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
-        $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
-        $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastrado', ENT_QUOTES, 'UTF-8');
+         
         $vali = new Vali();
 
         $cpf_paciente = $vali->formatarCPF($cpf);
@@ -335,6 +333,13 @@ class ProcessaPdfs
             ? $veri->valorPorExtenso($valor_consulta)
             : "duzentos e cinquenta reais";
         $valor_formatado = "R$ " . number_format($valor_consulta, 2, ',', '.');
+        
+         $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
+        $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
+        $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
+        $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastrado', ENT_QUOTES, 'UTF-8');
+
+        
         ;
         $html = '
         <!DOCTYPE html>

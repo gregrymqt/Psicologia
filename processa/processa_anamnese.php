@@ -1,7 +1,7 @@
 <?php
 session_start();
-require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
-require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
+require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/conexao.php';
+require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/funcoes.php';
 $vali= new Vali();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' ) {
@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' ) {
         'estado_civil' => $vali->sanitizarTexto($_POST['estado_civil'] ?? ''),
         'escolaridade' => $vali->sanitizarTexto($_POST['escolaridade'] ?? ''),
         'profissao' => $vali->sanitizarTexto($_POST['profissao'] ?? ''),
-        'endereco' => $vali->sanitizarTexto($_POST['endereco'] ?? ''),
+        'cep' => $vali->sanitizarTexto($_POST['cep'] ?? ''),
         'telefone' => $vali->sanitizarTexto($_POST['telefone'] ?? ''),
         'email' => $vali->sanitizarTexto($_POST['email'] ?? ''),
         'cpf' => $vali->sanitizarTexto($_POST['cpf'] ?? ''),
@@ -46,8 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' ) {
     if (empty($dados['genero'])) {
         $erros[] = "O gênero é obrigatório.";
     }
-    if (empty($dados['endereco'])) {
-        $erros[] = "O endereço é obrigatório.";
+    if (empty($dados['cep'])) {
+        $erros[] = "O cep é obrigatório.";
     }
     if (!$vali->validarTelefone($dados['telefone'])) {
         $erros[] = "Telefone inválido.";
@@ -76,13 +76,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' ) {
     }
     $sql = "INSERT INTO anamnese (
     nome_completo, nome_social, data_nascimento, idade, genero, estado_civil, escolaridade, 
-    profissao, endereco, telefone, email, cd_cpf, nome_responsavel, parentesco, 
-    telefone_responsavel, email_responsavel, cpf_responsavel, acompanhamento_anterior, reside_com, 
+    profissao, cep, telefone, email, cpf, nome_responsavel, parentesco, 
+    telefone_responsavel, email_responsavel, CPF_REPONSAVEL, acompanhamento_anterior, reside_com, 
     relacoes_familiares, situacoes_significativas,  onde_estuda, 
     ano_escolar, profissao_atual, onde_trabalha, observacoes_profissional, data_registro
 ) VALUES (
     :nome_completo, :nome_social, :data_nascimento, :idade, :genero, :estado_civil, :escolaridade, 
-    :profissao, :endereco, :telefone, :email, :cpf, :nome_responsavel, :parentesco, 
+    :profissao, :cep, :telefone, :email, :cpf, :nome_responsavel, :parentesco, 
     :telefone_responsavel, :email_responsavel, :cpf_responsavel, :acompanhamento_anterior, :reside_com, 
     :relacoes_familiares, :situacoes_significativas, :onde_estuda, 
     :ano_escolar, :profissao_atual, :onde_trabalha, :observacoes_profissional, NOW()
@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' ) {
         $stmt->bindParam(':estado_civil', $dados['estado_civil']);
         $stmt->bindParam(':escolaridade', $dados['escolaridade']);
         $stmt->bindParam(':profissao', $dados['profissao']);
-        $stmt->bindParam(':endereco', $dados['endereco']);
+        $stmt->bindParam(':cep', $dados['cep']);
         $stmt->bindParam(':telefone', $dados['telefone']);
         $stmt->bindParam(':email', $dados['email']);
         $stmt->bindParam(':cpf', $dados['cpf']);

@@ -1,8 +1,7 @@
 <?php
-session_start();
 // Verifica o caminho absoluto do arquivo
-require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
-require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
+require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/conexao.php';
+require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/funcoes.php';
 // Função auxiliar para simplificar o código
 function escape($value)
 {
@@ -49,13 +48,6 @@ $dados_form = $_POST ?? [];
   z-index: 0;
 }
 
-.section-title {
-  color: rgba(1, 37, 27, 0.63);
-  border-bottom: 2px solid rgb(26, 57, 78);
-  padding-bottom: 10px;
-  margin-top: 30px;
-  margin-bottom: 20px;
-}
 .mensagem-erro {
     font-size: 0.8em;
     margin-top: 5px;
@@ -69,6 +61,13 @@ $dados_form = $_POST ?? [];
     border-color: green;
 }
 
+.section-title {
+  color: rgba(1, 37, 27, 0.63);
+  border-bottom: 2px solid rgb(26, 57, 78);
+  padding-bottom: 10px;
+  margin-top: 30px;
+  margin-bottom: 20px;
+}
 
 .required-field::after {
   content: " *";
@@ -144,8 +143,7 @@ $dados_form = $_POST ?? [];
         <div class="form-container">
             <h1 style="color:rgba(1, 37, 27, 0.63);" class="text-center mb-4">ANAMNESE PSICOLÓGICA</h1>
 
-            <form action="/TiaLu/processa/processa_anamnese.php" method="post" id="formAnamnese">
-
+                <form action="processa/processa_anamnese.php" method="post" id="formAnamnese">
                 <!-- DADOS DE IDENTIFICAÇÃO DO PACIENTE -->
                 <div class="form-section">
                     <h2 class="section-title">DADOS DE IDENTIFICAÇÃO DO PACIENTE</h2>
@@ -227,9 +225,10 @@ $dados_form = $_POST ?? [];
                             <input type="text" class="form-control" id="profissao" name="profissao">
                         </div>
 
-                        <div class="col-12">
-                            <label for="endereco" class="form-label required-field">Endereço completo</label>
-                            <input type="text" class="form-control" id="endereco" name="endereco" required>
+                       <div class="col-12">
+                        <label for="cep" class="form-label required-field">CEP</label>
+                        <input type="text" class="form-control" id="cep" name="cep" 
+                                 placeholder="Digite apenas números" required>
                         </div>
 
                         <div class="col-md-4">
@@ -244,9 +243,9 @@ $dados_form = $_POST ?? [];
 
                         <div class="col-md-4">
                             <label for="cpf" class="form-label required-field">CPF do paciente</label>
-                            <input type="text" class="form-control" onblur="validarCPF(this)" id="cpf" name="cpf"  
+                             <input type="text" class="form-control" onblur="validarCPF(this)" id="cpf" name="cpf"  
                             value="<?= escape($dados_form['cpf'] ?? '') ?>" required>
-                            <div id="cpf-mensagem" class="mensagem-erro"></div>                                
+                            <div id="cpf-mensagem" class="mensagem-erro"></div>
                         </div>
                     </div>
                 </div>
@@ -280,7 +279,9 @@ $dados_form = $_POST ?? [];
 
                         <div class="col-md-4">
                             <label for="cpf_responsavel" class="form-label">CPF do responsável</label>
-                            <input type="text" class="form-control" id="cpf_responsavel" name="cpf_responsavel">
+                           <input type="text" class="form-control" onblur="validarCPF(this)" id="cpf_responsavel" name="cpf_responsavel"  
+                            value="<?= escape($dados_form['cpf_responsavel'] ?? '') ?>" required>
+                            <div id="cpf-mensagem" class="mensagem-erro"></div>
                         </div>
                     </div>
                 </div>
@@ -422,7 +423,58 @@ $dados_form = $_POST ?? [];
                 $('#idade').trigger('change');
             });
         });
+        
+        document.addEventListener('DOMContentLoaded', function() {
+    const cepInput = document.getElementById('cep');
 
+    // Formatação automática do CEP (XXXXX-XXX)
+    cepInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length > 5) {
+            value = value.substring(0, 5) + '-' + value.substring(5, 8);
+        }
+        e.target.value = value;
+    });
+
+    // Busca o endereço quando o campo perde o foco
+    cepInput.addEventListener('blur', async function() {
+        const cep = this.value.replace(/\D/g, '');
+        
+        if (cep.length !== 8) return; // Ignora CEPs incompletos
+
+        try {
+            // Mostra loading
+            const originalValue = cepInput.value;
+            cepInput.readOnly = true;
+            
+            // Consulta a API ViaCEP
+            const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+            const data = await response.json();
+            
+            if (data.erro) throw new Error('CEP não encontrado');
+            
+            // Formata todas as informações em uma string separada por vírgulas
+            const infoCompleta = [
+                `CEP: ${cepInput.value}`,
+                data.logradouro ? `Logradouro: ${data.logradouro}` : '',
+                data.complemento ? `Complemento: ${data.complemento}` : '',
+                data.bairro ? `Bairro: ${data.bairro}` : '',
+                data.localidade ? `Cidade: ${data.localidade}` : ''
+            ].filter(info => info !== '').join(', ');
+            
+            cepInput.value = infoCompleta;
+            cepInput.readOnly = false;
+            
+        } catch (error) {
+            console.error('Erro:', error);
+            alert('CEP não encontrado. Digite novamente.');
+            cepInput.value = '';
+            cepInput.readOnly = false;
+        }
+    });
+});
+
+        
         function validarCPF(input) {
     // Obtém o valor do campo
     const cpf = input.value;
