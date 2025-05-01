@@ -11,56 +11,50 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 
 
+
 class Consulta
 {
-    public function salvarObservacoes($id)
-    {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['salvar_observacoes'])) {
-            try {
-                $conn = Conexao::getConnection();
-                $observacoes = $_POST['observacoes'];
-                $stmt = $conn->prepare("UPDATE anamnese SET observacao_paciente = ? WHERE id_anam = ?");
-                $stmt->execute([$observacoes, $id]);
-
-                $_SESSION['sucesso'] = "Observações atualizadas com sucesso!";
-            } catch (PDOException $e) {
-                $_SESSION['erro'] = "Erro ao atualizar observações: " . $e->getMessage();
-            }
-
-            header("Location: " . $_SERVER['HTTP_REFERER']);
-            exit;
-        }
+    public function salvarObservacoes($id, $observacoes)
+{
+    try {
+        $conn = Conexao::getConnection();
+        $stmt = $conn->prepare("UPDATE anamnese SET observacao_paciente = ? WHERE id_anam = ?");
+        $stmt->execute([$observacoes, $id]);
+        return true;
+    } catch (PDOException $e) {
+        error_log("Erro ao salvar observações: " . $e->getMessage());
+        return false;
     }
+}
     public function consulpaciente()
     {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['consul_paci'])) {
             if (isset($_POST['nome_paciente'])) {
                 $nomePaciente = trim($_POST['nome_paciente']);
-
+    
                 try {
                     $conn = Conexao::getConnection();
                     $stmt = $conn->prepare("SELECT * FROM anamnese 
                           WHERE nome_completo LIKE :nome 
-                          ORDER BY ID DESC 
+                          ORDER BY id_anam DESC 
                           LIMIT 1");
                     $stmt->bindValue(':nome', '%' . $nomePaciente . '%');
                     $stmt->execute();
-
+    
                     $_SESSION['resultado_consulta'] = $stmt->fetch(PDO::FETCH_ASSOC);
                     $_SESSION['nome_buscado'] = $nomePaciente;
-
+                    
+    
                 } catch (PDOException $e) {
                     $_SESSION['erro'] = "Erro na consulta: " . $e->getMessage();
                 }
             } else {
                 $_SESSION['erro'] = "Por favor, informe o nome do paciente";
             }
-
+    
             header("Location: " . $_SERVER['PHP_SELF']);
             exit;
         }
     }
-}
 
 
 class ProcessaPdfs
@@ -624,39 +618,44 @@ class Psicologa
     }
     public function exibirModalLogin()
     {
-        $html = '
-    <div id="loginModal" class="modal">
-        <div class="modal-content">
-            <h2>Login</h2>';
-        if (isset($_SESSION['erro_login'])) {
-            $html .= '<p class="erro">' . $_SESSION['erro_login'] . '</p>';
-            unset($_SESSION['erro_login']);
-        }
-        $html .= '
-            <form method="POST" action="">
-                <div class="mb-3">
-                    <label for="email" class="form-label">Email:</label>
-                    <input type="email" class="form-control" id="email" name="email" required>
-                </div>
-                
-                <div class="mb-3">
-                    <label for="senha" class="form-label">Senha:</label>
-                    <input type="password" class="form-control" id="senha" name="senha" required>
-                </div>
-                
-                <div class="modal-buttons">
-                    <button type="submit" name="botLogin" class="btn btn-primary">
-                        <i class="bi bi-box-arrow-in-right"></i> Entrar
-                    </button>
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal()">
-                        <i class="bi bi-x-circle"></i> Cancelar
-                    </button>
-                </div>
-            </form>
+        return '
+        <div id="loginModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="fecharModal()">&times;</span>
+                <h2>Login</h2>
+                '. (isset($_SESSION['erro_login']) ? '<p class="erro">' . $_SESSION['erro_login'] . '</p>' : '') .'
+                <form method="POST" action="">
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email:</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="senha" class="form-label">Senha:</label>
+                        <input type="password" class="form-control" id="senha" name="senha" required>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="submit" name="botLogin" class="btn btn-primary">
+                            <i class="bi bi-box-arrow-in-right"></i> Entrar
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="fecharModal()">
+                            <i class="bi bi-x-circle"></i> Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
-    </div>
-    <div id="modalOverlay" class="overlay"></div>';
-        return $html;
+        <div id="modalOverlay" class="overlay"></div>
+        <script>
+            function abrirModal() {
+                document.getElementById("loginModal").style.display = "block";
+                document.getElementById("modalOverlay").style.display = "block";
+            }
+            function fecharModal() {
+                document.getElementById("loginModal").style.display = "none";
+                document.getElementById("modalOverlay").style.display = "none";
+            }
+            document.getElementById("modalOverlay").addEventListener("click", fecharModal);
+        </script>';
     }
 }
 

@@ -7,61 +7,63 @@ require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
 require_once 'C:/xampp/htdocs/TiaLu/processa/processa_Site.php';
 
 $psi = new Psicologa();
-$vali = new Vali();
 $consul = new Consulta();
 $pdf = new ProcessaPdfs();
-
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    try {
-        $usuario = [
-            'nome' => htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8'),
-            'crp' => htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8'),
-            'email' => htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8'),
-            'cpf' => htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'CPF não cadastrado', ENT_QUOTES, 'UTF-8')
-        ];
+    if (isset($_POST["gerar_recibo"])) {
 
-        $pdf->setUsuario($usuario);
-
-        if (isset($_POST["gerar_recibo"])) {
-
-            $pdf->gerarRecibo();
-            exit;
-        } elseif (isset($_POST["gerar_comparecimento"])) {
-
-
-            $pdf->gerarComparecimento();
-            exit();
-        } elseif (isset($_POST['gerar_atestado'])) {
-
-            $pdf->gerarAtestado();
-            exit();
-        } elseif (isset($_POST['salvar_observacoes'])) {
-            // Você precisa passar o ID do paciente aqui
-            $id_paciente = $_POST['id_paciente'] ?? null;
-
-            if ($id_paciente) {
-                $consul->salvarObservacoes($id_paciente);
-            } else {
-                $_SESSION['erro'] = "ID do paciente não informado";
-                header("Location: " . $_SERVER['HTTP_REFERER']);
-                exit;
-            }
-        } elseif (isset($_POST['consul_paci'])) {
-            $consul->consulpaciente();
-        } else {
-            echo "Opção não encontrada!";
-        }
-    } catch (Exception $e) {
-        error_log("Erro ao gerar documento: " . $e->getMessage());
-        $_SESSION['erro'] = "Erro ao gerar documento. Contate o administrador.";
+        $pdf->gerarRecibo();
         exit();
+    } elseif (isset($_POST["gerar_comparecimento"])) {
+
+        $pdf->gerarComparecimento();
+        exit();
+    } elseif (isset($_POST['gerar_atestado'])) {
+
+        $pdf->gerarAtestado();
+        exit();
+    } elseif (isset($_POST['consul_paci'])) {
+        $consul->consulpaciente();
+        exit();
+    } elseif (isset($_POST['salvar_observacoes'])) {
+        // Verifique TODOS os campos necessários
+        if (empty($_POST['id_paciente'])) {
+            $_SESSION['erro'] = "ID do paciente não informado";
+        } elseif (empty($_POST['observacoes'])) {
+            $_SESSION['erro'] = "Por favor, insira as observações";
+        } else {
+            try {
+                $consul->salvarObservacoes($_POST['id_paciente'], $_POST['observacoes']);
+                $_SESSION['sucesso'] = "Observações salvas com sucesso!";
+            } catch (Exception $e) {
+                $_SESSION['erro'] = "Erro ao salvar: " . $e->getMessage();
+            }
+        }
+
+        header("Location: " . $_SERVER['HTTP_REFERER']);
+        exit;
     }
 } else {
-    echo "Erro ao enviar!";
-    exit();
+    header('SiteLu.php');
 }
+
+
+if (!isset($_SESSION['resultado_consulta']['observacao_paciente'])) {
+    echo "DEBUG: observacao_paciente não está definida na sessão";
+}
+if (!isset($_SESSION['resultado_consulta']['id_anam'])) {
+    echo "DEBUG: id_anam não está definido na sessão";
+}
+$usuario = [
+    'nome' => htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8'),
+    'crp' => htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8'),
+    'email' => htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8'),
+    'cpf' => htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'CPF não cadastrado', ENT_QUOTES, 'UTF-8')
+];
+
+
 ?>
-<!DOCTYPE html>
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 
@@ -116,23 +118,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
 
         .document-tab {
-            padding: 12px 24px;
+            padding: 12px 20px;
             cursor: pointer;
             font-weight: 500;
             white-space: nowrap;
             border-bottom: 3px solid transparent;
             transition: all 0.3s ease;
-            text-align: center;
-            color: #495057;
-            border-radius: 4px 4px 0 0;
-            margin: 0 2px;
-        }
-
-        .document-tab.active {
-            border-bottom-color: #0d6efd;
-            color: #0d6efd;
-            font-weight: 600;
-            background-color: rgba(13, 110, 253, 0.05);
         }
 
         .mensagem-erro {
@@ -152,7 +143,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background-color: rgba(13, 110, 253, 0.1);
         }
 
-
+        .document-tab.active {
+            border-bottom-color: #0d6efd;
+            color: #0d6efd;
+            font-weight: 600;
+        }
 
         /* Estilos do Conteúdo */
         .document-content {
@@ -162,10 +157,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         .document-content.active {
             display: block;
-        }
-
-        .document-tabs-container::-webkit-scrollbar {
-            display: none;
         }
 
         .btn-group {
@@ -432,7 +423,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <div class="container-fluid">
 
             <div class="welcome-text mx-auto d-none d-sm-flex">
-                Seja bem-vinda, <?php echo $nomeUsuario ?>
+                Seja bem-vinda, <?php echo $_SESSION['usuario']['nome'] ?>
             </div>
 
             <!-- Botão de Login (só aparece se não logado) -->
@@ -445,33 +436,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     <!-- Container Principal -->
     <div class="container mt-3 mt-md-4">
-        <!-- Abas de Documentos com Scroll Horizontal -->
-
-        <div class="document-tabs-container"
-            style="width: 100%; overflow-x: auto; white-space: nowrap; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; padding: 10px 0; margin-bottom: 15px;">
-            <div class="document-tabs-wrapper" style="display: flex; justify-content: center;">
-                <div class="document-tabs" style="display: inline-flex; gap: 8px; padding: 0 20px;">
-                    <div class="document-tab active" onclick="showDocument('atestado')" style="flex-shrink: 0;">
-                        <i class="bi bi-file-earmark-medical d-none d-md-inline"></i> Atestado
-                    </div>
-                    <div class="document-tab" onclick="showDocument('comparecimento')" style="flex-shrink: 0;">
-                        <i class="bi bi-calendar-check d-none d-md-inline"></i> Comparecimento
-                    </div>
-                    <div class="document-tab" onclick="showDocument('recibo')" style="flex-shrink: 0;">
-                        <i class="bi bi-receipt d-none d-md-inline"></i> Recibo
-                    </div>
-                    <div class="document-tab" onclick="showDocument('consulta')" style="flex-shrink: 0;">
-                        <i class="bi bi-receipt d-none d-md-inline"></i> Consulta
-                    </div>
-                    <div class="document-tab" onclick="showDocument('informacoes')" style="flex-shrink: 0;">
-                        <i class="bi bi-info-circle d-none d-md-inline"></i> Informações
-                    </div>
-                </div>
+        <!-- Abas de Documentos Responsivas -->
+        <div class="document-tabs">
+            <div class="document-tab active" onclick="showDocument('atestado')">
+                <i class="bi bi-file-earmark-medical d-none d-md-inline"></i> Atestado
+            </div>
+            <div class="document-tab" onclick="showDocument('comparecimento')">
+                <i class="bi bi-calendar-check d-none d-md-inline"></i> Comparecimento
+            </div>
+            <div class="document-tab" onclick="showDocument('recibo')">
+                <i class="bi bi-receipt d-none d-md-inline"></i> Recibo
+            </div>
+            <div class="document-tab" onclick="showDocument('consulta')">
+                <i class="bi bi-receipt d-none d-md-inline"></i> Consulta
+            </div>
+            <div class="document-tab" onclick="showDocument('informacoes')" style="flex-shrink: 0;">
+                <i class="bi bi-info-circle d-none d-md-inline"></i> Informações
             </div>
         </div>
         <!-- Formulário de Atestado (visível por padrão) -->
         <div id="atestado-content" class="document-content active">
-            <form id="atestado-form" method="post">
+            <form id="atestado-form" method="post" action="">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente" class="form-label">Nome do Paciente:</label>
@@ -514,10 +499,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </div>
             </form>
         </div>
-
         <!-- Formulário de Comparecimento (oculto por padrão) -->
         <div id="comparecimento-content" class="document-content">
-            <form id="comparecimento-form" method="post">
+            <form id="comparecimento-form" method="post" action="">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
@@ -556,9 +540,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </div>
             </form>
         </div>
-
         <div id="recibo-content" class="document-content">
-            <form id="recibo-form" method="post">
+            <form id="recibo-form" method="post" action="">
                 <div class="row g-3">
                     <div class="col-12">
                         <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
@@ -582,9 +565,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </div>
             </form>
         </div>
-
         <div id="consulta-content" class="document-content">
-            <form method="post">
+            <form method="POST" action="" id="consulta_form">
                 <div class="row g-3">
                     <div class="col-md-12">
                         <label for="nome_paciente" class="form-label">Nome do Paciente:</label>
@@ -616,10 +598,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <div class="mt-4">
                     <h4>Resultados para: <?= htmlspecialchars($_SESSION['nome_buscado']) ?></h4>
 
-                    <?php if ($_SESSION['resultado_consulta']): ?>
+                    <?php if (!empty($_SESSION['resultado_consulta'])): ?>
                         <div class="row mt-3">
                             <?php foreach ($_SESSION['resultado_consulta'] as $campo => $valor): ?>
-                                <?php if (!empty($valor) && $campo !== 'observacao_paciente'): // Exclui o campo observações do loop ?>
+                                <?php if (!empty($valor) && $campo !== 'observacao_paciente'): ?>
                                     <div class="col-md-6 mb-3">
                                         <div class="card">
                                             <div class="card-body">
@@ -636,7 +618,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                         <div class="row mt-4">
                             <div class="col-md-12">
-                                <form method="post">
+                                <form method="POST" action="">
                                     <input type="hidden" name="id_paciente"
                                         value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
 
@@ -645,10 +627,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <h5 class="mb-0">Observações do Paciente</h5>
                                         </div>
                                         <div class="card-body">
-                                            <textarea class="form-control" name="observacoes" rows="5"
-                                                style="min-height: 150px;">
-                                    <?= htmlspecialchars($_SESSION['resultado_consulta']['observacao_paciente'] ?? '') ?>
-                                </textarea>
+                                            <textarea name="observacoes" rows="5" style="min-height: 150px;"
+                                                class="form-control"><?= htmlspecialchars($_SESSION['resultado_consulta']['observacao_paciente'] ?? '') ?>
+                                            </textarea>
                                         </div>
                                         <div class="card-footer text-end">
                                             <button type="submit" class="btn btn-primary" name="salvar_observacoes">
@@ -659,19 +640,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                 </form>
                             </div>
                         </div>
+                    <?php else: ?>
+                        <div class="alert alert-warning mt-3">
+                            Nenhum paciente encontrado com este nome.
+                        </div>
                     <?php endif; ?>
-                    <div class="alert alert-warning mt-3">
-                        Nenhum paciente encontrado com este nome.
-                    </div>
-                <?php endif; ?>
-            </div>
-            <?php unset($_SESSION['resultado_consulta'], $_SESSION['nome_buscado']); ?>
+                </div>
+            <?php else: ?>
+                <div class="alert alert-warning mt-3">
+                    Nenhum paciente encontrado com este nome.
+                </div>
+            <?php endif; ?>
         </div>
+        <?php unset($_SESSION['resultado_consulta'], $_SESSION['nome_buscado']); ?>
+    </div>
 
-        <div id="informacoes-content" class="document-content">
-            <h2>Informações Adicionais</h2>
-            <p>Conteúdo da aba de informações...</p>
-        </div>
+    <div id="informacoes-content" class="document-content">
+        <h2>Informações Adicionais</h2>
+        <p>Conteúdo da aba de informações...</p>
+    </div>
 
 
     </div>
@@ -682,74 +669,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        // Função para mostrar o documento selecionado
-        function showDocument(documentId) {
+        function showDocument(documentType) {
             // Esconde todos os conteúdos
             document.querySelectorAll('.document-content').forEach(content => {
                 content.classList.remove('active');
             });
-
             // Remove a classe active de todas as abas
             document.querySelectorAll('.document-tab').forEach(tab => {
                 tab.classList.remove('active');
             });
-
             // Mostra o conteúdo selecionado
-            document.getElementById(documentId + '-content').classList.add('active');
-
+            document.getElementById(documentType + '-content').classList.add('active');
             // Ativa a aba selecionada
-            const tabs = document.querySelectorAll('.document-tab');
-            tabs.forEach(tab => {
-                if (tab.getAttribute('onclick').includes(documentId)) {
-                    tab.classList.add('active');
-                    // Rola para a aba selecionada
-                    scrollToTab(tab);
-                }
-            });
+            event.currentTarget.classList.add('active');
         }
-        // Função para rolar suavemente até a aba
-        function scrollToTab(tabElement) {
-            // Seleciona o container correto (o que tem a barra de scroll)
-            const tabsContainer = document.querySelector('.document-tabs-container');
-            const containerWidth = tabsContainer.offsetWidth;
-            const tabLeft = tabElement.offsetLeft;
-            const tabWidth = tabElement.offsetWidth;
-
-            // Calcula a posição para centralizar a aba
-            const scrollLeft = tabLeft - (containerWidth / 2) + (tabWidth / 2);
-
-            // Aplica o scroll
-            tabsContainer.scrollTo({
-                left: scrollLeft,
-                behavior: 'smooth'
-            });
-        }
-        // Adiciona suporte para gestos de swipe (opcional)
-        document.addEventListener('DOMContentLoaded', function () {
-            const tabsContainer = document.querySelector('.document-tabs-container');
-            let startX;
-            let isScrolling = false;
-
-            tabsContainer.addEventListener('touchstart', (e) => {
-                startX = e.touches[0].pageX;
-                isScrolling = true;
-            }, { passive: true });
-
-            tabsContainer.addEventListener('touchmove', (e) => {
-                if (!isScrolling) return;
-                const x = e.touches[0].pageX;
-                const walk = (x - startX);
-                tabsContainer.scrollLeft -= walk;
-                startX = x;
-            }, { passive: true });
-
-            tabsContainer.addEventListener('touchend', () => {
-                isScrolling = false;
-            }, { passive: true });
-        });
         // Melhorar a experiência em dispositivos móveis
         document.addEventListener('DOMContentLoaded', function () {
-            // Ajustar textareas
+            // Ajustar altura dos textareas
             const textareas = document.querySelectorAll('textarea');
             textareas.forEach(textarea => {
                 textarea.style.minHeight = '100px';
@@ -772,13 +708,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 const firstTab = document.querySelector('.document-tab');
                 if (firstTab) {
                     firstTab.classList.add('active');
-                    const tabId = firstTab.getAttribute('onclick').match(/'([^']+)'/)[1];
-                    document.getElementById(tabId + '-content').classList.add('active');
+                    const firstContent = document.querySelector('.document-content');
+                    if (firstContent) firstContent.classList.add('active');
                 }
             }
         });
-
-
 
         function validarCPF(input) {
             // Obtém o valor do campo
@@ -841,6 +775,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 mensagemElemento.style.color = 'red';
             }
         }
+
+        document.addEventListener('DOMContentLoaded', function () {
+
+
+
+            // Opcional: Ajustar altura automaticamente conforme o conteúdo
+            textarea.style.height = 'auto';
+            textarea.style.height = (textarea.scrollHeight) + 'px';
+        });
 
         function abrirModal() {
             document.getElementById('loginModal').style.display = 'block';
