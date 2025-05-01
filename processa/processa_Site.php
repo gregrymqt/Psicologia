@@ -10,51 +10,49 @@ require_once __DIR__ . '/../vendor/autoload.php'; // ou o caminho correto$vali =
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
-
-
 class Consulta
 {
     public function salvarObservacoes($id, $observacoes)
-{
-    try {
-        $conn = Conexao::getConnection();
-        $stmt = $conn->prepare("UPDATE anamnese SET observacao_paciente = ? WHERE id_anam = ?");
-        $stmt->execute([$observacoes, $id]);
-        return true;
-    } catch (PDOException $e) {
-        error_log("Erro ao salvar observações: " . $e->getMessage());
-        return false;
+    {
+        try {
+            $conn = Conexao::getConnection();
+            $stmt = $conn->prepare("UPDATE anamnese SET observacao_paciente = ? WHERE id_anam = ?");
+            $stmt->execute([$observacoes, $id]);
+            return true;
+        } catch (PDOException $e) {
+            error_log("Erro ao salvar observações: " . $e->getMessage());
+            return false;
+        }
     }
-}
     public function consulpaciente()
     {
-            if (isset($_POST['nome_paciente'])) {
-                $nomePaciente = trim($_POST['nome_paciente']);
-    
-                try {
-                    $conn = Conexao::getConnection();
-                    $stmt = $conn->prepare("SELECT * FROM anamnese 
+        if (isset($_POST['nome_paciente'])) {
+            $nomePaciente = trim($_POST['nome_paciente']);
+
+            try {
+                $conn = Conexao::getConnection();
+                $stmt = $conn->prepare("SELECT * FROM anamnese 
                           WHERE nome_completo LIKE :nome 
                           ORDER BY id_anam DESC 
                           LIMIT 1");
-                    $stmt->bindValue(':nome', '%' . $nomePaciente . '%');
-                    $stmt->execute();
-    
-                    $_SESSION['resultado_consulta'] = $stmt->fetch(PDO::FETCH_ASSOC);
-                    $_SESSION['nome_buscado'] = $nomePaciente;
-                    
-    
-                } catch (PDOException $e) {
-                    $_SESSION['erro'] = "Erro na consulta: " . $e->getMessage();
-                }
-            } else {
-                $_SESSION['erro'] = "Por favor, informe o nome do paciente";
+                $stmt->bindValue(':nome', '%' . $nomePaciente . '%');
+                $stmt->execute();
+
+                $_SESSION['resultado_consulta'] = $stmt->fetch(PDO::FETCH_ASSOC);
+                $_SESSION['nome_buscado'] = $nomePaciente;
+
+
+            } catch (PDOException $e) {
+                $_SESSION['erro'] = "Erro na consulta: " . $e->getMessage();
             }
-    
-            header("Location: " . $_SERVER['PHP_SELF']);
-            exit;
+        } else {
+            $_SESSION['erro'] = "Por favor, informe o nome do paciente";
         }
+
+        header("Location: " . $_SERVER['PHP_SELF']);
+        exit;
     }
+}
 
 
 class ProcessaPdfs
@@ -62,11 +60,17 @@ class ProcessaPdfs
     private $logoPath;
     private $base64;
     private $options;
-
+    private $basePath;
     public function __construct()
     {
         $this->configurarImg(); // Configura automaticamente ao instanciar
-
+        $this->basePath = realpath('C:/xampp/htdocs/TiaLu/caminho/pdf');
+        // Garante que o diretório base existe
+        if (!file_exists($this->basePath)) {
+            if (!mkdir($this->basePath, 0755, true)) {
+                throw new Exception("Não foi possível criar o diretório para PDFs");
+            }
+        }
     }
     public function configurarImg()
     {
@@ -108,7 +112,7 @@ class ProcessaPdfs
         // 5. SE CHEGOU ATÉ AQUI, USUÁRIO ESTÁ LOGADO
 // Agora podemos processar a página normalmente
     }
-    public function gerarAtestado()
+    public function gerarAtestado($identificacao)
     {
         $camposObrigatorios = ['nome_paciente', 'hora_inicio', 'hora_fim', 'motivo', 'retorno', 'data', 'local'];
         foreach ($camposObrigatorios as $campo) {
@@ -189,34 +193,48 @@ class ProcessaPdfs
                </div>
            </body>
            </html>';
+
+        // Gera o nome do arquivo
+        $filename = "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf";
+        $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
+
+        // Cria o PDF
         $dompdf = new Dompdf($this->options);
+
         try {
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
-            set_time_limit(120); // 2 minutos para renderização
-            $dompdf->render();
-            // Limpeza de buffer
-            while (ob_get_level()) {
-                ob_end_clean();
-            }
-            $dompdf->stream(
-                "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
-                ["Attachment" => true]
-            );
+
+            // Salva o PDF no servidor
+            file_put_contents($filepath, $dompdf->output());
+
+            // Armazena no banco de dados
+            $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'atestado');
+
+
+            // 2. Gera HTML com o botão de download
+            echo $this->generatePdfViewerHtml($dompdf->output(), $filename);
             exit;
         } catch (Exception $e) {
-            // Log detalhado do erro
-            $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
-            $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
-            file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
-            die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
+            // Remove o arquivo se houve erro
+            if (file_exists($filepath)) {
+                unlink($filepath);
+            }
+
+            error_log("Erro ao gerar PDF: " . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => "Erro ao gerar documento"
+            ];
         }
-
     }
-
-    public function gerarComparecimento()
+    public function gerarComparecimento($identificacao)
     {
+        // Validação do ID do paciente
+        if (!is_numeric($identificacao)) {
+            die("ID do paciente inválido");
+        }
         $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
         $data_nascimento = htmlspecialchars($_POST["data_nascimento"] ?? '');
         $hora_inicio = htmlspecialchars($_POST["horario_inicio"] ?? '');
@@ -238,7 +256,6 @@ class ProcessaPdfs
 
         $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
         $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
-        $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
 
         // Gerar HTML da declaração
         $html = '
@@ -327,32 +344,45 @@ class ProcessaPdfs
 
         </body>
         </html>';
+        $filename = "comparecimento_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf";
+        $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
+
+        // Cria o PDF
         $dompdf = new Dompdf($this->options);
+
         try {
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
-            set_time_limit(120); // 2 minutos para renderização
-            $dompdf->render();
-            // Limpeza de buffer
-            while (ob_get_level()) {
-                ob_end_clean();
-            }
-            $dompdf->stream(
-                "Comparecimento_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
-                ["Attachment" => true]
-            );
+
+            // Salva o PDF no servidor
+            file_put_contents($filepath, $dompdf->output());
+
+            // Armazena no banco de dados
+            $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'comparecimento');
+
+            header('Content-Type: application/pdf');
+            header('Content-Disposition: inline; filename="' . $filename . '"');
+
+            // 2. Gera HTML com o botão de download
+            echo $this->generatePdfViewerHtml($dompdf->output(), $filename);
             exit;
+           
+
         } catch (Exception $e) {
-            // Log detalhado do erro
-            $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
-            $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
-            file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
-            die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
+            // Remove o arquivo se houve erro
+            if (file_exists($filepath)) {
+                unlink($filepath);
+            }
+
+            error_log("Erro ao gerar PDF: " . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => "Erro ao gerar documento"
+            ];
         }
     }
-
-    public function gerarRecibo()
+    public function gerarRecibo($identificacao)
     {
 
 
@@ -482,31 +512,130 @@ class ProcessaPdfs
            </div>
         </body>
         </html>';
+        $filename = "recibo_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf";
+        $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
+
+        // Cria o PDF
         $dompdf = new Dompdf($this->options);
+
+        $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
+        file_put_contents($filepath, $dompdf->output());
+        $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'recibo');
         try {
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
-            set_time_limit(120); // 2 minutos para renderização
-            $dompdf->render();
-            // Limpeza de buffer
-            while (ob_get_level()) {
-                ob_end_clean();
-            }
-            $dompdf->stream(
-                "Recibo_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf",
-                ["Attachment" => true]
-            );
-            exit;
-        } catch (Exception $e) {
-            // Log detalhado do erro
-            $errorLog = date('[Y-m-d H:i:s]') . " ERRO: " . $e->getMessage() . "\n";
-            $errorLog .= "Trace: " . $e->getTraceAsString() . "\n\n";
-            file_put_contents(__DIR__ . '/pdf_errors.log', $errorLog, FILE_APPEND);
-            die("Falha crítica ao gerar PDF. Detalhes foram registrados no log.");
-        }
 
+            // Salva o PDF no servidor
+            file_put_contents($filepath, $dompdf->output());
+
+            // Armazena no banco de dados
+            $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'recibo');
+
+            // Retorna os dados do PDF gerado
+            header('Content-Type: application/pdf');
+            header('Content-Disposition: inline; filename="' . $filename . '"');
+
+            // 2. Gera HTML com o botão de download
+            echo $this->generatePdfViewerHtml($dompdf->output(), $filename);
+            exit;
+
+        } catch (Exception $e) {
+            // Remove o arquivo se houve erro
+            if (file_exists($filepath)) {
+                unlink($filepath);
+            }
+
+            error_log("Erro ao gerar PDF: " . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => "Erro ao gerar documento"
+            ];
+        }
     }
+
+    private function salvarNoBanco($filepath, $idPaciente, $usuario, $tipo)
+    {
+        $conn = Conexao::getConnection();
+        $conn->beginTransaction();
+
+        try {
+            $stmt = $conn->prepare("
+                    INSERT INTO anamnese_pdfs 
+                    (conteudo_pdf, id_paciente, tipo_documento, usuario_criacao) 
+                    VALUES (:caminho, :id_paciente, :tipo, :usuario)
+                ");
+
+            $stmt->execute([
+                ':caminho' => $filepath,
+                ':id_paciente' => $idPaciente,
+                ':tipo' => $tipo,
+                ':usuario' => $usuario
+            ]);
+
+            $conn->commit();
+            return true;
+
+        } catch (PDOException $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
+    private function generatePdfViewerHtml($pdfContent, $filename)
+    {
+        $base64Pdf = base64_encode($pdfContent);
+
+        return <<<HTML
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Visualizar Recibo</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+            .pdf-container { display: flex; flex-direction: column; height: 100vh; }
+            .pdf-toolbar { 
+                background: #f5f5f5; 
+                padding: 10px; 
+                display: flex; 
+                justify-content: flex-end;
+                border-bottom: 1px solid #ddd;
+            }
+            .download-btn {
+                background: #4CAF50;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                cursor: pointer;
+                text-decoration: none;
+            }
+            .pdf-viewer {
+                flex-grow: 1;
+                border: none;
+                width: 100%;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="pdf-container">
+            <div class="pdf-toolbar">
+                <a href="data:application/pdf;base64,{$base64Pdf}" 
+                   download="{$filename}" 
+                   class="download-btn">
+                   <i class="bi bi-download"></i> Baixar Recibo
+                </a>
+            </div>
+            <iframe class="pdf-viewer" 
+                    src="data:application/pdf;base64,{$base64Pdf}"></iframe>
+        </div>
+    </body>
+    </html>
+    HTML;
+    }
+
+
+
 
 }
 
@@ -623,7 +752,7 @@ class Psicologa
             <div class="modal-content">
                 <span class="close" onclick="fecharModal()">&times;</span>
                 <h2>Login</h2>
-                '. (isset($_SESSION['erro_login']) ? '<p class="erro">' . $_SESSION['erro_login'] . '</p>' : '') .'
+                ' . (isset($_SESSION['erro_login']) ? '<p class="erro">' . $_SESSION['erro_login'] . '</p>' : '') . '
                 <form method="POST" action="">
                     <div class="mb-3">
                         <label for="email" class="form-label">Email:</label>

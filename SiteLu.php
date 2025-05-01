@@ -5,22 +5,18 @@ ini_set('display_errors', 1);
 require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
 require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
 require_once 'C:/xampp/htdocs/TiaLu/processa/processa_Site.php';
-
 $psi = new Psicologa();
 $consul = new Consulta();
 $pdf = new ProcessaPdfs();
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST["gerar_recibo"])) {
-
-        $pdf->gerarRecibo();
+        $pdf->gerarRecibo($paciente_identificacao);
         exit();
     } elseif (isset($_POST["gerar_comparecimento"])) {
-
-        $pdf->gerarComparecimento();
+        $pdf->gerarComparecimento($paciente_identificacao);
         exit();
     } elseif (isset($_POST['gerar_atestado'])) {
-
-        $pdf->gerarAtestado();
+        $pdf->gerarAtestado($paciente_identificacao);
         exit();
     } elseif (isset($_POST['consul_paci'])) {
         $consul->consulpaciente();
@@ -39,34 +35,28 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['erro'] = "Erro ao salvar: " . $e->getMessage();
             }
         }
-
         header("Location: " . $_SERVER['HTTP_REFERER']);
         exit;
     }
 } else {
     header('SiteLu.php');
 }
-
-
-if (!isset($_SESSION['resultado_consulta']['observacao_paciente'])) {
-    echo "DEBUG: observacao_paciente não está definida na sessão";
-}
-if (!isset($_SESSION['resultado_consulta']['id_anam'])) {
-    echo "DEBUG: id_anam não está definido na sessão";
-}
+// if (!isset($_SESSION['resultado_consulta']['observacao_paciente'])) {
+//     echo "DEBUG: observacao_paciente não está definida na sessão";
+// }
+// if (!isset($_SESSION['resultado_consulta']['id_anam'])) {
+//     echo "DEBUG: id_anam não está definido na sessão";
+// }
 $usuario = [
     'nome' => htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8'),
     'crp' => htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8'),
     'email' => htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8'),
     'cpf' => htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'CPF não cadastrado', ENT_QUOTES, 'UTF-8')
 ];
-
-
+$paciente_identificacao = htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? 'Codigo não encontrado', ENT_QUOTES, 'UTF-8');
 ?>
-
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -84,19 +74,16 @@ $usuario = [
             /* 50px acima do rodapé */
             background-attachment: fixed;
         }
-
         /* Estilos da Navbar */
         .navbar-custom {
             background-color: rgba(135, 150, 99, 0.84);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-
         .navbar-brand img {
             height: 70px;
             width: auto;
             transition: all 0.3s ease;
         }
-
         .welcome-text {
             font-size: 1.2rem;
             font-weight: 500;
@@ -107,7 +94,6 @@ $usuario = [
             text-overflow: ellipsis;
             max-width: 50vw;
         }
-
         /* Estilos das Abas */
         .document-tabs {
             display: flex;
@@ -116,7 +102,6 @@ $usuario = [
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
         }
-
         .document-tab {
             padding: 12px 20px;
             cursor: pointer;
@@ -125,52 +110,42 @@ $usuario = [
             border-bottom: 3px solid transparent;
             transition: all 0.3s ease;
         }
-
         .mensagem-erro {
             font-size: 0.8em;
             margin-top: 5px;
         }
-
         .invalido {
             border-color: red;
         }
-
         .valido {
             border-color: green;
         }
-
         .document-tab:hover {
             background-color: rgba(13, 110, 253, 0.1);
         }
-
         .document-tab.active {
             border-bottom-color: #0d6efd;
             color: #0d6efd;
             font-weight: 600;
         }
-
         /* Estilos do Conteúdo */
         .document-content {
             display: none;
             animation: fadeIn 0.3s ease;
         }
-
         .document-content.active {
             display: block;
         }
-
         .btn-group {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
             margin-top: 20px;
         }
-
         .btn-group .btn {
             flex: 1 1 150px;
             background-color: rgba(135, 150, 99, 0.84);
         }
-
         .modal {
             display: none;
             position: fixed;
@@ -184,7 +159,6 @@ $usuario = [
             overflow: hidden;
             /* Para manter bordas arredondadas */
         }
-
         .modal-content {
             padding: 30px;
             /* Espaçamento interno */
@@ -193,19 +167,16 @@ $usuario = [
             display: flex;
             flex-direction: column;
         }
-
         .modal h2 {
             text-align: center;
             margin-bottom: 25px;
             color: #333;
         }
-
         /* Container dos botões */
         .modal .btn-primary {
             background-color: #4a6baf;
             border-color: #4a6baf;
         }
-
         .modal-buttons {
             display: flex;
             justify-content: center;
@@ -216,7 +187,6 @@ $usuario = [
             /* Empurra para baixo */
             padding-top: 20px;
         }
-
         /* Estilo dos botões */
         .modal .btn {
             padding: 10px 20px;
@@ -228,37 +198,29 @@ $usuario = [
             max-width: 150px;
             /* Largura máxima */
         }
-
-
         .modal .btn-primary {
             background-color: #4a6baf;
             border-color: #4a6baf;
         }
-
         .modal .btn-secondary {
             background-color: #6c757d;
             border-color: #6c757d;
         }
-
         /* Efeito hover */
         .modal .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
-
         .card {
             transition: transform 0.2s;
         }
-
         .card:hover {
             transform: translateY(-5px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
-
         .d-flex.align-items-end {
             padding-bottom: 15px;
         }
-
         /* Mensagem de erro */
         .erro {
             color: #dc3545;
@@ -269,7 +231,6 @@ $usuario = [
             border-radius: 4px;
             border: 1px solid #f5c6cb;
         }
-
         /* Campos do formulário */
         .modal .form-control {
             margin-bottom: 15px;
@@ -277,7 +238,6 @@ $usuario = [
             border-radius: 6px;
             border: 1px solid #ced4da;
         }
-
         /* Overlay */
         .overlay {
             display: none;
@@ -289,11 +249,9 @@ $usuario = [
             background-color: rgba(0, 0, 0, 0.5);
             z-index: 1040;
         }
-
         body.modal-open {
             overflow: hidden;
         }
-
         .dados-item {
             background-color: #f8f9fa;
             border-left: 4px solid #0d6efd;
@@ -302,71 +260,63 @@ $usuario = [
             margin-bottom: 10px;
             transition: all 0.3s ease;
         }
-
         .dados-item:hover {
             background-color: #e9ecef;
             border-left-color: #0b5ed7;
         }
-
         #resultado-consulta {
             animation: fadeIn 0.5s ease-out;
         }
-
         /* Animações */
         @keyframes fadeIn {
             from {
                 opacity: 0;
                 transform: translateY(10px);
             }
-
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
         }
-
+        @media (min-width: 578px) {
+            .document-tabs {
+                justify-content: center;
+            }
+        }
         /* Ajustes para mobile */
         @media (max-width: 992px) {
             .welcome-text {
                 font-size: 1rem;
                 max-width: 40vw;
             }
-
             .navbar-brand img {
                 height: 35px;
             }
-
             .document-tab {
                 padding: 10px 15px;
                 font-size: 0.95rem;
             }
         }
-
         @media (max-width: 768px) {
             .welcome-text {
                 font-size: 0.9rem;
                 max-width: 30vw;
             }
-
             .navbar-brand img {
                 height: 30px;
             }
-
             .document-tab {
                 padding: 8px 12px;
                 font-size: 0.9rem;
             }
-
             .btn-group .btn {
                 flex: 1 1 100%;
             }
         }
-
         @media (max-width: 576px) {
             .welcome-text {
                 display: none;
             }
-
             body {
                 background-image: url('img/marcaDaguaLu.png');
                 background-size: 280px;
@@ -376,28 +326,23 @@ $usuario = [
                 /* 50px acima do rodapé */
                 background-attachment: fixed;
             }
-
             .navbar-brand img {
                 height: 25px;
             }
-
             .document-tabs {
                 justify-content: space-around;
             }
-
             .document-tab {
                 flex: 1;
                 text-align: center;
                 padding: 10px 5px;
                 font-size: 0.85rem;
             }
-
             .modal {
                 width: 95%;
                 padding: 15px;
             }
         }
-
         @media (max-width: 374px) {
             .modal .btn {
                 padding: 8px 15px;
@@ -407,7 +352,6 @@ $usuario = [
                 font-size: 14px;
                 /* Opcional: reduz o tamanho da fonte */
             }
-
             .modal-buttons {
                 gap: 10px;
                 /* Reduz o espaço entre botões */
@@ -416,24 +360,19 @@ $usuario = [
         }
     </style>
 </head>
-
 <body>
     <!-- Navbar Responsiva -->
     <nav class="navbar navbar-expand-lg navbar-custom py-2 py-lg-3">
         <div class="container-fluid">
-
             <div class="welcome-text mx-auto d-none d-sm-flex">
                 Seja bem-vinda, <?php echo $_SESSION['usuario']['nome'] ?>
             </div>
-
             <!-- Botão de Login (só aparece se não logado) -->
-
             <div class="d-flex">
                 <?php echo $psi->exibirBotoesAuth() ?>
             </div>
         </div>
     </nav>
-
     <!-- Container Principal -->
     <div class="container mt-3 mt-md-4">
         <!-- Abas de Documentos Responsivas -->
@@ -574,7 +513,6 @@ $usuario = [
                             value="<?= isset($_SESSION['nome_buscado']) ? htmlspecialchars($_SESSION['nome_buscado']) : '' ?>"
                             required autofocus>
                     </div>
-
                     <div class="col-md-12 text-center mt-3">
                         <div class="btn-group">
                             <button type="submit" class="btn " name="consul_paci">
@@ -584,7 +522,6 @@ $usuario = [
                     </div>
                 </div>
             </form>
-
             <!-- Exibição de erros -->
             <?php if (isset($_SESSION['erro'])): ?>
                 <div class="alert alert-danger mt-3">
@@ -592,12 +529,10 @@ $usuario = [
                 </div>
                 <?php unset($_SESSION['erro']); ?>
             <?php endif; ?>
-
             <!-- Resultados da Consulta -->
             <?php if (isset($_SESSION['resultado_consulta'])): ?>
                 <div class="mt-4">
                     <h4>Resultados para: <?= htmlspecialchars($_SESSION['nome_buscado']) ?></h4>
-
                     <?php if (!empty($_SESSION['resultado_consulta'])): ?>
                         <div class="row mt-3">
                             <?php foreach ($_SESSION['resultado_consulta'] as $campo => $valor): ?>
@@ -615,13 +550,11 @@ $usuario = [
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </div>
-
                         <div class="row mt-4">
                             <div class="col-md-12">
                                 <form method="POST" action="">
                                     <input type="hidden" name="id_paciente"
                                         value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
-
                                     <div class="card">
                                         <div class="card-header bg-primary text-white">
                                             <h5 class="mb-0">Observações do Paciente</h5>
@@ -629,7 +562,7 @@ $usuario = [
                                         <div class="card-body">
                                             <textarea name="observacoes" rows="5" style="min-height: 150px;"
                                                 class="form-control"><?= htmlspecialchars($_SESSION['resultado_consulta']['observacao_paciente'] ?? '') ?>
-                                            </textarea>
+                                                    </textarea>
                                         </div>
                                         <div class="card-footer text-end">
                                             <button type="submit" class="btn btn-primary" name="salvar_observacoes">
@@ -659,12 +592,8 @@ $usuario = [
         <h2>Informações Adicionais</h2>
         <p>Conteúdo da aba de informações...</p>
     </div>
-
-
     </div>
-
     <?php echo $psi->exibirModalLogin() ?>
-
     <!-- Bootstrap JS Bundle + Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -713,58 +642,50 @@ $usuario = [
                 }
             }
         });
-
         function validarCPF(input) {
             // Obtém o valor do campo
             const cpf = input.value;
-
             // Remove caracteres não numéricos
             const cpfLimpo = cpf.replace(/\D/g, '');
-
             // Verifica se tem 11 dígitos ou se é uma sequência de dígitos iguais
             if (cpfLimpo.length !== 11 || /^(\d)\1{10}$/.test(cpfLimpo)) {
                 mostrarErro(input, 'CPF inválido');
                 return false;
-            }
 
-            // Validação do primeiro dígito verificador
-            let soma = 0;
-            for (let i = 0; i < 9; i++) {
-                soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
+                // Validação do primeiro dígito verificador
+                let soma = 0;
+                for (let i = 0; i < 9; i++) {
+                    soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
+                }
+                let resto = (soma * 10) % 11;
+                resto = resto === 10 ? 0 : resto;
+                if (resto !== parseInt(cpfLimpo.charAt(9))) {
+                    mostrarErro(input, 'CPF inválido');
+                    return false;
+                }
+                // Validação do segundo dígito verificador
+                soma = 0;
+                for (let i = 0; i < 10; i++) {
+                    soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
+                }
+                resto = (soma * 10) % 11;
+                resto = resto === 10 ? 0 : resto;
+                if (resto !== parseInt(cpfLimpo.charAt(10))) {
+                    mostrarErro(input, 'CPF inválido');
+                    return false;
+                }
+                // Formata e mostra como válido
+                input.value = formatarCPF(cpfLimpo);
+                mostrarErro(input, '', true);
+                return true;
             }
-            let resto = (soma * 10) % 11;
-            resto = resto === 10 ? 0 : resto;
-            if (resto !== parseInt(cpfLimpo.charAt(9))) {
-                mostrarErro(input, 'CPF inválido');
-                return false;
-            }
-
-            // Validação do segundo dígito verificador
-            soma = 0;
-            for (let i = 0; i < 10; i++) {
-                soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
-            }
-            resto = (soma * 10) % 11;
-            resto = resto === 10 ? 0 : resto;
-            if (resto !== parseInt(cpfLimpo.charAt(10))) {
-                mostrarErro(input, 'CPF inválido');
-                return false;
-            }
-
-            // Formata e mostra como válido
-            input.value = formatarCPF(cpfLimpo);
-            mostrarErro(input, '', true);
-            return true;
         }
-
         function formatarCPF(cpf) {
             return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
         }
-
         function mostrarErro(input, mensagem, valido = false) {
             const mensagemElemento = document.getElementById('cpf-mensagem');
             mensagemElemento.textContent = mensagem;
-
             if (valido) {
                 input.classList.remove('invalido');
                 input.classList.add('valido');
@@ -775,22 +696,16 @@ $usuario = [
                 mensagemElemento.style.color = 'red';
             }
         }
-
         document.addEventListener('DOMContentLoaded', function () {
-
-
-
             // Opcional: Ajustar altura automaticamente conforme o conteúdo
             textarea.style.height = 'auto';
             textarea.style.height = (textarea.scrollHeight) + 'px';
         });
-
         function abrirModal() {
             document.getElementById('loginModal').style.display = 'block';
             document.getElementById('overlay').style.display = 'block';
             document.body.classList.add('modal-open');
         }
-
         function fecharModal() {
             document.getElementById('loginModal').style.display = 'none';
             document.getElementById('overlay').style.display = 'none';
@@ -798,5 +713,4 @@ $usuario = [
         }
     </script>
 </body>
-
 </html>
