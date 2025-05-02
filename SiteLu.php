@@ -13,19 +13,19 @@ ini_set('display_errors', 1);
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST["gerar_recibo"])) {
         try {
-            $pdf->gerarRecibo($_POST['id_paciente']);
+            $pdf->gerarRecibo($_SESSION['resultado_consulta']['id_anam']);
         } catch (Exception $e) {
             echo '<div class="alert alert-danger">Erro ao gerar: ' . htmlspecialchars($e->getMessage()) . '</div>';
         }
     } elseif (isset($_POST["gerar_comparecimento"])) {
         try {
-            $pdf->gerarComparecimento($_POST['id_paciente']);
+            $pdf->gerarComparecimento($_SESSION['resultado_consulta']['id_anam']);
         } catch (Exception $e) {
             echo '<div class="alert alert-danger">Erro ao gerar: ' . htmlspecialchars($e->getMessage()) . '</div>';
         }
     } elseif (isset($_POST['gerar_atestado'])) {
         try {
-            $pdf->gerarAtestado($_POST['id_paciente']);
+            $pdf->gerarAtestado($_SESSION['resultado_consulta']['id_anam']);
         } catch (Exception $e) {
             echo '<div class="alert alert-danger">Erro ao gerar: ' . htmlspecialchars($e->getMessage()) . '</div>';
         }
@@ -63,9 +63,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     header('SiteLu.php');
 }
 
+
 if (isset($_COOKIE['resultado_consulta'])) {
     $_SESSION['resultado_consulta'] = json_decode($_COOKIE['resultado_consulta'], true);
 }
+// var_dump($_SESSION['resultado_consulta']['id_anam']);
 
 
 if (isset($_COOKIE['nome_buscado'])) {
