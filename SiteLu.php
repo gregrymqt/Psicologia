@@ -314,10 +314,9 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
                     <input type="radio" id="filtroData" name="filtro" value="data_criacao">
                     <label for="filtroData">Data de Criação</label>
                     <div class="filtro-input" id="inputData">
-                        <label for="dataInicio">Data Início:</label>
+                        <label for="dataInicio">Data :</label>
                         <input type="date" id="dataInicio" name="dataInicio">
-                        <label for="dataFim">Data Fim:</label>
-                        <input type="date" id="dataFim" name="dataFim">
+                        
                     </div>
                 </div>
 

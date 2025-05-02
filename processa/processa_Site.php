@@ -77,7 +77,7 @@ class ConsultaPfd
         public function consultaPdfs()
         {
             try {
-                $sql = "SELECT data_criacao, tipo_documento, nome_paciente, cpf_paciente FROM anamnese_pdfs WHERE 1=1";
+                $sql = "SELECT data_criacao, tipo_documento, cpf_paciente FROM anamnese_pdfs WHERE 1=1";
                 $params = [];
                 // Se nenhum filtro foi selecionado
             if (!isset($_POST['filtro']) || empty($_POST['filtro'])) {
@@ -89,22 +89,15 @@ class ConsultaPfd
             else {
                     switch ($_POST['filtro']) {
                         case 'data_criacao':
-                            if (!empty($_POST['dataInicio']) && !empty($_POST['dataFim'])) {
-                                $sql .= " AND data_criacao BETWEEN :dataInicio AND :dataFim";
+                            if (!empty($_POST['dataInicio'])) {
+                                $sql .= " AND data_criacao = :dataInicio ";
                                 $params[':dataInicio'] = $_POST['dataInicio'];
-                                $params[':dataFim'] = $_POST['dataFim'];
                             }
                             break;
                         case 'tipo_documento':
                             if (!empty($_POST['tipoDocumento'])) {
                                 $sql .= " AND tipo_documento = :tipoDocumento";
                                 $params[':tipoDocumento'] = $_POST['tipoDocumento'];
-                            }
-                            break;
-                        case 'nome_paciente':
-                            if (!empty($_POST['nomePaciente'])) {
-                                $sql .= " AND nome_paciente LIKE :nomePaciente";
-                                $params[':nomePaciente'] = '%' . $_POST['nomePaciente'] . '%';
                             }
                             break;
                         case 'cpf_paciente':
@@ -130,14 +123,13 @@ class ConsultaPfd
                 echo '<h2>Resultados da Consulta</h2>';
                 echo '<div class="table-responsive">';
                 echo '<table class="table table-striped">';
-                echo '<thead><tr><th>Data</th><th>Tipo</th><th>Paciente</th><th>CPF</th></tr></thead>';
+                echo '<thead><tr><th>Data</th><th>Tipo</th><th>CPF</th></tr></thead>';
                 echo '<tbody>';
 
                 foreach ($resultados as $row) {
                     echo '<tr>';
                     echo '<td>' . htmlspecialchars($row['data_criacao']) . '</td>';
                     echo '<td>' . htmlspecialchars($row['tipo_documento']) . '</td>';
-                    echo '<td>' . htmlspecialchars($row['nome_paciente']) . '</td>';
                     echo '<td>' . htmlspecialchars($row['cpf_paciente']) . '</td>';
                     echo '</tr>';
                 }
