@@ -10,6 +10,13 @@ require_once __DIR__ . '/../vendor/autoload.php'; // ou o caminho correto$vali =
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
+if(isset($_COOKIE['resultado_consulta'])) {
+    $_SESSION['resultado_consulta'] = json_decode($_COOKIE['resultado_consulta'], true);
+}
+if(isset($_COOKIE['nome_buscado'])) {
+    $_SESSION['nome_buscado'] = $_COOKIE['nome_buscado'];
+}
+
 class Consulta
 {
     public function salvarObservacoes($id, $observacoes)
@@ -41,6 +48,9 @@ class Consulta
                 $_SESSION['resultado_consulta'] = $stmt->fetch(PDO::FETCH_ASSOC);
                 $_SESSION['nome_buscado'] = $nomePaciente;
 
+                setcookie('resultado_consulta', json_encode($_SESSION['resultado_consulta']), time() + (86400 * 30), "/"); // Válido por 30 dias
+                setcookie('nome_buscado', $nomePaciente, time() + (86400 * 30), "/");
+
 
             } catch (PDOException $e) {
                 $_SESSION['erro'] = "Erro na consulta: " . $e->getMessage();
@@ -51,6 +61,92 @@ class Consulta
 
         header("Location: " . $_SERVER['PHP_SELF']);
         exit;
+    }
+}
+
+
+
+
+class ConsultaPfd
+{
+    private  $conn;
+    public function __construct()
+    {
+        $this->conn = Conexao::getConnection();
+    }
+        public function consultaPdfs()
+        {
+            try {
+                $sql = "SELECT data_criacao, tipo_documento, nome_paciente, cpf_paciente FROM anamnese_pdfs WHERE 1=1";
+                $params = [];
+                // Se nenhum filtro foi selecionado
+            if (!isset($_POST['filtro']) || empty($_POST['filtro'])) {
+                $sql = "SELECT data_criacao, tipo_documento, nome_paciente, cpf_paciente 
+                        FROM anamnese_pdfs 
+                        ORDER BY data_criacao DESC 
+                        LIMIT 100";
+            } 
+            else {
+                    switch ($_POST['filtro']) {
+                        case 'data_criacao':
+                            if (!empty($_POST['dataInicio']) && !empty($_POST['dataFim'])) {
+                                $sql .= " AND data_criacao BETWEEN :dataInicio AND :dataFim";
+                                $params[':dataInicio'] = $_POST['dataInicio'];
+                                $params[':dataFim'] = $_POST['dataFim'];
+                            }
+                            break;
+                        case 'tipo_documento':
+                            if (!empty($_POST['tipoDocumento'])) {
+                                $sql .= " AND tipo_documento = :tipoDocumento";
+                                $params[':tipoDocumento'] = $_POST['tipoDocumento'];
+                            }
+                            break;
+                        case 'nome_paciente':
+                            if (!empty($_POST['nomePaciente'])) {
+                                $sql .= " AND nome_paciente LIKE :nomePaciente";
+                                $params[':nomePaciente'] = '%' . $_POST['nomePaciente'] . '%';
+                            }
+                            break;
+                        case 'cpf_paciente':
+                            if (!empty($_POST['cpfPaciente'])) {
+                                $sql .= " AND cpf_paciente = :cpfPaciente";
+                                $params[':cpfPaciente'] = $_POST['cpfPaciente'];
+                            }
+                            break;
+                    }
+                }
+                // Prepara e executa a query
+                $stmt = $this->conn->prepare($sql);
+                $stmt->execute($params);
+                return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } catch (PDOException $e) {
+                throw new Exception('Erro ao consultar o banco: ' . $e->getMessage());
+            }
+    }
+    public function exibirResultado($resultados)
+    {
+        
+            if (!empty($resultados)) {
+                echo '<h2>Resultados da Consulta</h2>';
+                echo '<div class="table-responsive">';
+                echo '<table class="table table-striped">';
+                echo '<thead><tr><th>Data</th><th>Tipo</th><th>Paciente</th><th>CPF</th></tr></thead>';
+                echo '<tbody>';
+
+                foreach ($resultados as $row) {
+                    echo '<tr>';
+                    echo '<td>' . htmlspecialchars($row['data_criacao']) . '</td>';
+                    echo '<td>' . htmlspecialchars($row['tipo_documento']) . '</td>';
+                    echo '<td>' . htmlspecialchars($row['nome_paciente']) . '</td>';
+                    echo '<td>' . htmlspecialchars($row['cpf_paciente']) . '</td>';
+                    echo '</tr>';
+                }
+
+                echo '</tbody></table></div>';
+            } else {
+                echo '<div class="alert alert-info">Nenhum documento encontrado.</div>';
+            }
+        
     }
 }
 
@@ -114,14 +210,13 @@ class ProcessaPdfs
     }
     public function gerarAtestado($identificacao)
     {
-        $camposObrigatorios = ['nome_paciente', 'hora_inicio', 'hora_fim', 'motivo', 'retorno', 'data', 'local'];
+        $camposObrigatorios = ['hora_inicio', 'hora_fim', 'motivo', 'retorno', 'data', 'local'];
         foreach ($camposObrigatorios as $campo) {
             if (empty($_POST[$campo])) {
                 die("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
             }
         }
         // Processa os dados do formulário
-        $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
         $hora_inicio = htmlspecialchars($_POST["hora_inicio"] ?? '');
         $hora_fim = htmlspecialchars($_POST["hora_fim"] ?? '');
         $motivo = htmlspecialchars($_POST["motivo"] ?? '');
@@ -173,7 +268,7 @@ class ProcessaPdfs
                            Psicóloga – CRP ' . htmlspecialchars($crpUsuario) . '<br>
                            E-mail: ' . htmlspecialchars($emailUsuario) . '</p>
                            
-                           <p>Atesto, para os devidos fins, que o(a) Sr.(a) <span class="underline">' . $nome_paciente . '</span>, 
+                           <p>Atesto, para os devidos fins, que o(a) Sr.(a) <span class="underline">' . $_SESSION['resultado_consulta']['nome_completo'] . '</span>, 
                            esteve em atendimento psicológico nesta data, das ' . date("H:i", strtotime($hora_inicio)) . ' 
                            às ' . date("H:i", strtotime($hora_fim)) . '.</p>
                            
@@ -195,12 +290,15 @@ class ProcessaPdfs
            </html>';
 
         // Gera o nome do arquivo
-        $filename = "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf";
+        $filename = "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $_SESSION['resultado_consulta']['nome_completo']) . "_" . date('Y-m-d') . ".pdf";
         $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
 
         // Cria o PDF
         $dompdf = new Dompdf($this->options);
 
+        $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
+        file_put_contents($filepath, $dompdf->output());
+        $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'atestado');
         try {
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
@@ -235,23 +333,22 @@ class ProcessaPdfs
         if (!is_numeric($identificacao)) {
             die("ID do paciente inválido");
         }
-        $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
-        $data_nascimento = htmlspecialchars($_POST["data_nascimento"] ?? '');
+
         $hora_inicio = htmlspecialchars($_POST["horario_inicio"] ?? '');
         $hora_fim = htmlspecialchars($_POST["horario_fim"] ?? '');
         $local = htmlspecialchars($_POST["local"] ?? '');
         $data_atendimento = htmlspecialchars($_POST["data_atendimento"] ?? '');
-        $camposObrigatorios = ['nome_paciente', 'data_nascimento', 'horario_inicio', 'horario_fim', 'local', 'data_atendimento'];
+        $camposObrigatorios = ['horario_inicio', 'horario_fim', 'local', 'data_atendimento'];
         foreach ($camposObrigatorios as $campo) {
             if (empty($_POST[$campo])) {
                 die("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
             }
         }
-        if (!strtotime($data_nascimento) || !strtotime($data_atendimento)) {
+        if (!strtotime($_SESSION['resultado_consulta']['data_nascimento']) || !strtotime($data_atendimento)) {
             die("Data inválida. Por favor, verifique as datas informadas.");
         }
         // Formatar datas
-        $data_nasc_formatada = date("d/m/Y", strtotime($data_nascimento));
+        $data_nasc_formatada = date("d/m/Y", strtotime($_SESSION['resultado_consulta']['data_nascimento']));
         $data_atend_formatada = date("d/m/Y", strtotime($data_atendimento));
 
         $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
@@ -317,7 +414,7 @@ class ProcessaPdfs
                 DECLARAÇÃO DE COMPARECIMENTO
             </div>
 
-            <p>Declaro, para os devidos fins, que o(a) Sr.(a) <span class="underline">' . htmlspecialchars($nome_paciente) . '</span>,<br>
+            <p>Declaro, para os devidos fins, que o(a) Sr.(a) <span class="underline">' . htmlspecialchars($_SESSION['resultado_consulta']['nome_completo']) . '</span>,<br>
             nascido(a) em ' . htmlspecialchars($data_nasc_formatada) . ', compareceu ao atendimento psicológico nesta data,<br>
             no horário das ' . date("H:i", strtotime($hora_inicio)) . ' às ' . date("H:i", strtotime($hora_fim)) . '.</p>
             
@@ -344,12 +441,15 @@ class ProcessaPdfs
 
         </body>
         </html>';
-        $filename = "comparecimento_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf";
+        $filename = "comparecimento_" . preg_replace('/[^a-z0-9]/i', '_', $_SESSION['resultado_consulta']['nome_completo']) . "_" . date('Y-m-d') . ".pdf";
         $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
 
         // Cria o PDF
         $dompdf = new Dompdf($this->options);
 
+        $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
+        file_put_contents($filepath, $dompdf->output());
+        $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'comparecimento');
         try {
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
@@ -361,13 +461,12 @@ class ProcessaPdfs
             // Armazena no banco de dados
             $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'comparecimento');
 
-            header('Content-Type: application/pdf');
-            header('Content-Disposition: inline; filename="' . $filename . '"');
+
 
             // 2. Gera HTML com o botão de download
             echo $this->generatePdfViewerHtml($dompdf->output(), $filename);
             exit;
-           
+
 
         } catch (Exception $e) {
             // Remove o arquivo se houve erro
@@ -386,19 +485,10 @@ class ProcessaPdfs
     {
 
 
-        $camposObrigatorios = ['nome_paciente', 'cpf'];
-        foreach ($camposObrigatorios as $campo) {
-            if (empty($_POST[$campo])) {
-                die("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
-            }
-        }
-        $nome_paciente = htmlspecialchars($_POST["nome_paciente"] ?? '');
-        $cpf = $_POST['cpf'];
-
 
         $vali = new Vali();
 
-        $cpf_paciente = $vali->formatarCPF($cpf);
+        $cpf_paciente = $vali->formatarCPF($_SESSION['resultado_consulta']['cd_cpf']);
         date_default_timezone_set('America/Sao_Paulo');
         // Obtém a data e hora atual
         $dataSaoPaulo = new DateTime();
@@ -481,7 +571,7 @@ class ProcessaPdfs
                     </div>
                     
                     <div class="corpo-recibo">
-                        <p>Recebi de <strong>' . htmlspecialchars($nome_paciente, ENT_QUOTES) . '</strong>,</p>
+                        <p>Recebi de <strong>' . htmlspecialchars($_SESSION['resultado_consulta']['nome_completo'], ENT_QUOTES) . '</strong></p>
                         <div class="dados-paciente">
                             <p>CPF: ' . htmlspecialchars($cpf_paciente, ENT_QUOTES) . '</p>
                         </div>
@@ -512,7 +602,7 @@ class ProcessaPdfs
            </div>
         </body>
         </html>';
-        $filename = "recibo_" . preg_replace('/[^a-z0-9]/i', '_', $nome_paciente) . "_" . date('Y-m-d') . ".pdf";
+        $filename = "recibo_" . preg_replace('/[^a-z0-9]/i', '_', $_SESSION['resultado_consulta']['nome_completo']) . "_" . date('Y-m-d') . ".pdf";
         $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
 
         // Cria o PDF
@@ -527,14 +617,10 @@ class ProcessaPdfs
             $dompdf->render();
 
             // Salva o PDF no servidor
-            file_put_contents($filepath, $dompdf->output());
 
             // Armazena no banco de dados
             $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'recibo');
 
-            // Retorna os dados do PDF gerado
-            header('Content-Type: application/pdf');
-            header('Content-Disposition: inline; filename="' . $filename . '"');
 
             // 2. Gera HTML com o botão de download
             echo $this->generatePdfViewerHtml($dompdf->output(), $filename);
@@ -558,19 +644,22 @@ class ProcessaPdfs
     {
         $conn = Conexao::getConnection();
         $conn->beginTransaction();
+        $erros = [];
+        $cpf=$_SESSION['resultado_consulta']['cd_cpf'];
 
         try {
             $stmt = $conn->prepare("
                     INSERT INTO anamnese_pdfs 
-                    (conteudo_pdf, id_paciente, tipo_documento, usuario_criacao) 
-                    VALUES (:caminho, :id_paciente, :tipo, :usuario)
+                    (conteudo_pdf, id_paciente, tipo_documento, usuario_criacao, cpf_paciente) 
+                    VALUES (:caminho, :id_paciente, :tipo, :usuario , :cpf)
                 ");
 
             $stmt->execute([
                 ':caminho' => $filepath,
                 ':id_paciente' => $idPaciente,
                 ':tipo' => $tipo,
-                ':usuario' => $usuario
+                ':usuario' => $usuario,
+                ':cpf' => $cpf
             ]);
 
             $conn->commit();
@@ -578,7 +667,14 @@ class ProcessaPdfs
 
         } catch (PDOException $e) {
             $conn->rollBack();
-            throw $e;
+            $erros[] = "Erro no banco de dados: " . $e->getMessage();
+        } catch (Exception $e) {
+            $conn->rollBack();
+            $erros[] = $e->getMessage();
+        }
+        // Se houve erros, mostra eles
+        foreach ($erros as $erro) {
+            echo "<p>Erro: $erro</p>";
         }
     }
 

@@ -1,4 +1,5 @@
 <?php
+ob_start();
 session_start();
 require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
 require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
@@ -76,8 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' ) {
     }
     $sql = "INSERT INTO anamnese (
     nome_completo, nome_social, data_nascimento, idade, genero, estado_civil, escolaridade, 
-    profissao, cep, telefone, email, cpf, nome_responsavel, parentesco, 
-    telefone_responsavel, email_responsavel, CPF_REPONSAVEL, acompanhamento_anterior, reside_com, 
+    profissao, cep, telefone, email, cd_cpf, nome_responsavel, parentesco, 
+    telefone_responsavel, email_responsavel, cpf_responsavel, acompanhamento_anterior, reside_com, 
     relacoes_familiares, situacoes_significativas,  onde_estuda, 
     ano_escolar, profissao_atual, onde_trabalha, observacoes_profissional, data_registro
 ) VALUES (
@@ -122,7 +123,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' ) {
         $id_paciente = $conn->lastInsertId();
 
         $conn->commit();
-        header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
+        if (ob_get_length()) ob_clean();
+         
+    // Envia o HTML completo
+  ?>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Cadastro</title>
+        <!-- CDN alternativo caso o principal falhe -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.4.24/sweetalert2.all.min.js"></script>
+    </head>
+    <body>
+        <!-- Conteúdo mínimo necessário -->
+        <script>
+                // Versão completa após confirmação
+                Swal.fire({
+                    title: "Sucesso!",
+                    text: "Dados cadastrados com sucesso!",
+                    icon: "success",
+                    confirmButtonText: "OK",
+                    confirmButtonColor: "#3085d6"
+               
+            });
+        </script>
+    </body>
+    </html>
+    <?php
+    exit; 
     } catch (PDOException $e) {
         $conn->rollBack();
         $erros[] = "Erro no banco de dados: " . $e->getMessage();

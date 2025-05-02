@@ -1,26 +1,40 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-// 2. INCLUIR DEPENDÊNCIAS
 require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
 require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
 require_once 'C:/xampp/htdocs/TiaLu/processa/processa_Site.php';
 $psi = new Psicologa();
 $consul = new Consulta();
 $pdf = new ProcessaPdfs();
+$consulPdf = new ConsultaPfd(); // Certifique-se que a classe está disponível
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST["gerar_recibo"])) {
-        $pdf->gerarRecibo($paciente_identificacao);
-        exit();
+        try {
+            $pdf->gerarRecibo($_POST['id_paciente']);
+        } catch (Exception $e) {
+            echo '<div class="alert alert-danger">Erro ao gerar: ' . htmlspecialchars($e->getMessage()) . '</div>';
+        }
     } elseif (isset($_POST["gerar_comparecimento"])) {
-        $pdf->gerarComparecimento($paciente_identificacao);
-        exit();
+        try {
+            $pdf->gerarComparecimento($_POST['id_paciente']);
+        } catch (Exception $e) {
+            echo '<div class="alert alert-danger">Erro ao gerar: ' . htmlspecialchars($e->getMessage()) . '</div>';
+        }
     } elseif (isset($_POST['gerar_atestado'])) {
-        $pdf->gerarAtestado($paciente_identificacao);
-        exit();
+        try {
+            $pdf->gerarAtestado($_POST['id_paciente']);
+        } catch (Exception $e) {
+            echo '<div class="alert alert-danger">Erro ao gerar: ' . htmlspecialchars($e->getMessage()) . '</div>';
+        }
     } elseif (isset($_POST['consul_paci'])) {
-        $consul->consulpaciente();
-        exit();
+        try {
+            $consul->consulpaciente();
+        } catch (Exception $e) {
+            echo '<div class="alert alert-danger">Erro na consulta: ' . htmlspecialchars($e->getMessage()) . '</div>';
+        }
     } elseif (isset($_POST['salvar_observacoes'])) {
         // Verifique TODOS os campos necessários
         if (empty($_POST['id_paciente'])) {
@@ -37,26 +51,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
         header("Location: " . $_SERVER['HTTP_REFERER']);
         exit;
+    }elseif(isset($_POST['gerar_consulta'])) {
+        try {
+            $consulPdf = new ConsultaPfd();
+            $resultados = $consulPdf->consultaPdfs();
+        } catch (Exception $e) {
+            $erro = $e->getMessage();
+        }
     }
 } else {
     header('SiteLu.php');
 }
-// if (!isset($_SESSION['resultado_consulta']['observacao_paciente'])) {
-//     echo "DEBUG: observacao_paciente não está definida na sessão";
-// }
-// if (!isset($_SESSION['resultado_consulta']['id_anam'])) {
-//     echo "DEBUG: id_anam não está definido na sessão";
-// }
-$usuario = [
-    'nome' => htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8'),
-    'crp' => htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8'),
-    'email' => htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8'),
-    'cpf' => htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'CPF não cadastrado', ENT_QUOTES, 'UTF-8')
-];
-$paciente_identificacao = htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? 'Codigo não encontrado', ENT_QUOTES, 'UTF-8');
+
+if (isset($_COOKIE['resultado_consulta'])) {
+    $_SESSION['resultado_consulta'] = json_decode($_COOKIE['resultado_consulta'], true);
+}
+
+
+if (isset($_COOKIE['nome_buscado'])) {
+    $_SESSION['nome_buscado'] = $_COOKIE['nome_buscado'];
+}
+$nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
+$crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
+$emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
+$cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastrado', ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -64,308 +86,16 @@ $paciente_identificacao = htmlspecialchars($_SESSION['resultado_consulta']['id_a
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <style>
-        body {
-            background-image: url('img/marcaDaguaLu.png');
-            background-size: 390px;
-            /* Largura fixa (altura proporcional) */
-            background-repeat: no-repeat;
-            background-position: center calc(100% + 100px);
-            /* 50px acima do rodapé */
-            background-attachment: fixed;
-        }
-        /* Estilos da Navbar */
-        .navbar-custom {
-            background-color: rgba(135, 150, 99, 0.84);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .navbar-brand img {
-            height: 70px;
-            width: auto;
-            transition: all 0.3s ease;
-        }
-        .welcome-text {
-            font-size: 1.2rem;
-            font-weight: 500;
-            color: #333;
-            text-align: center;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 50vw;
-        }
-        /* Estilos das Abas */
-        .document-tabs {
-            display: flex;
-            border-bottom: 2px solid #dee2e6;
-            margin-bottom: 20px;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-        .document-tab {
-            padding: 12px 20px;
-            cursor: pointer;
-            font-weight: 500;
-            white-space: nowrap;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s ease;
-        }
-        .mensagem-erro {
-            font-size: 0.8em;
-            margin-top: 5px;
-        }
-        .invalido {
-            border-color: red;
-        }
-        .valido {
-            border-color: green;
-        }
-        .document-tab:hover {
-            background-color: rgba(13, 110, 253, 0.1);
-        }
-        .document-tab.active {
-            border-bottom-color: #0d6efd;
-            color: #0d6efd;
-            font-weight: 600;
-        }
-        /* Estilos do Conteúdo */
-        .document-content {
-            display: none;
-            animation: fadeIn 0.3s ease;
-        }
-        .document-content.active {
-            display: block;
-        }
-        .btn-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        .btn-group .btn {
-            flex: 1 1 150px;
-            background-color: rgba(135, 150, 99, 0.84);
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 90%;
-            max-width: 500px;
-            border-radius: 8px;
-            z-index: 1050;
-            overflow: hidden;
-            /* Para manter bordas arredondadas */
-        }
-        .modal-content {
-            padding: 30px;
-            /* Espaçamento interno */
-            min-height: 300px;
-            /* Altura mínima */
-            display: flex;
-            flex-direction: column;
-        }
-        .modal h2 {
-            text-align: center;
-            margin-bottom: 25px;
-            color: #333;
-        }
-        /* Container dos botões */
-        .modal .btn-primary {
-            background-color: #4a6baf;
-            border-color: #4a6baf;
-        }
-        .modal-buttons {
-            display: flex;
-            justify-content: center;
-            /* Centraliza horizontalmente */
-            gap: 15px;
-            /* Espaço entre botões */
-            margin-top: auto;
-            /* Empurra para baixo */
-            padding-top: 20px;
-        }
-        /* Estilo dos botões */
-        .modal .btn {
-            padding: 10px 20px;
-            border-radius: 6px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            flex: 1;
-            /* Faz os botões terem mesma largura */
-            max-width: 150px;
-            /* Largura máxima */
-        }
-        .modal .btn-primary {
-            background-color: #4a6baf;
-            border-color: #4a6baf;
-        }
-        .modal .btn-secondary {
-            background-color: #6c757d;
-            border-color: #6c757d;
-        }
-        /* Efeito hover */
-        .modal .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-        .card {
-            transition: transform 0.2s;
-        }
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-        .d-flex.align-items-end {
-            padding-bottom: 15px;
-        }
-        /* Mensagem de erro */
-        .erro {
-            color: #dc3545;
-            text-align: center;
-            margin-bottom: 20px;
-            padding: 10px;
-            background-color: #f8d7da;
-            border-radius: 4px;
-            border: 1px solid #f5c6cb;
-        }
-        /* Campos do formulário */
-        .modal .form-control {
-            margin-bottom: 15px;
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid #ced4da;
-        }
-        /* Overlay */
-        .overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 1040;
-        }
-        body.modal-open {
-            overflow: hidden;
-        }
-        .dados-item {
-            background-color: #f8f9fa;
-            border-left: 4px solid #0d6efd;
-            padding: 10px 15px;
-            border-radius: 4px;
-            margin-bottom: 10px;
-            transition: all 0.3s ease;
-        }
-        .dados-item:hover {
-            background-color: #e9ecef;
-            border-left-color: #0b5ed7;
-        }
-        #resultado-consulta {
-            animation: fadeIn 0.5s ease-out;
-        }
-        /* Animações */
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        @media (min-width: 578px) {
-            .document-tabs {
-                justify-content: center;
-            }
-        }
-        /* Ajustes para mobile */
-        @media (max-width: 992px) {
-            .welcome-text {
-                font-size: 1rem;
-                max-width: 40vw;
-            }
-            .navbar-brand img {
-                height: 35px;
-            }
-            .document-tab {
-                padding: 10px 15px;
-                font-size: 0.95rem;
-            }
-        }
-        @media (max-width: 768px) {
-            .welcome-text {
-                font-size: 0.9rem;
-                max-width: 30vw;
-            }
-            .navbar-brand img {
-                height: 30px;
-            }
-            .document-tab {
-                padding: 8px 12px;
-                font-size: 0.9rem;
-            }
-            .btn-group .btn {
-                flex: 1 1 100%;
-            }
-        }
-        @media (max-width: 576px) {
-            .welcome-text {
-                display: none;
-            }
-            body {
-                background-image: url('img/marcaDaguaLu.png');
-                background-size: 280px;
-                /* Largura fixa (altura proporcional) */
-                background-repeat: no-repeat;
-                background-position: center calc(100% + 55px);
-                /* 50px acima do rodapé */
-                background-attachment: fixed;
-            }
-            .navbar-brand img {
-                height: 25px;
-            }
-            .document-tabs {
-                justify-content: space-around;
-            }
-            .document-tab {
-                flex: 1;
-                text-align: center;
-                padding: 10px 5px;
-                font-size: 0.85rem;
-            }
-            .modal {
-                width: 95%;
-                padding: 15px;
-            }
-        }
-        @media (max-width: 374px) {
-            .modal .btn {
-                padding: 8px 15px;
-                /* Reduz o padding */
-                max-width: 120px;
-                /* Reduz a largura máxima */
-                font-size: 14px;
-                /* Opcional: reduz o tamanho da fonte */
-            }
-            .modal-buttons {
-                gap: 10px;
-                /* Reduz o espaço entre botões */
-                padding-top: 15px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="css/SiteLu.css">
+
 </head>
+
 <body>
     <!-- Navbar Responsiva -->
     <nav class="navbar navbar-expand-lg navbar-custom py-2 py-lg-3">
         <div class="container-fluid">
             <div class="welcome-text mx-auto d-none d-sm-flex">
-                Seja bem-vinda, <?php echo $_SESSION['usuario']['nome'] ?>
+                Seja bem-vinda, <?php echo $nomeUsuario ?>
             </div>
             <!-- Botão de Login (só aparece se não logado) -->
             <div class="d-flex">
@@ -396,11 +126,9 @@ $paciente_identificacao = htmlspecialchars($_SESSION['resultado_consulta']['id_a
         <!-- Formulário de Atestado (visível por padrão) -->
         <div id="atestado-content" class="document-content active">
             <form id="atestado-form" method="post" action="">
+                <input type="hidden" name="id_paciente"
+                    value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
                 <div class="row g-3">
-                    <div class="col-12">
-                        <label for="nome_paciente" class="form-label">Nome do Paciente:</label>
-                        <input type="text" class="form-control" id="nome_paciente" name="nome_paciente" required>
-                    </div>
                     <div class="col-md-6">
                         <label for="hora_inicio" class="form-label">Horário de Início:</label>
                         <input type="time" class="form-control" id="hora_inicio" name="hora_inicio" required>
@@ -441,15 +169,10 @@ $paciente_identificacao = htmlspecialchars($_SESSION['resultado_consulta']['id_a
         <!-- Formulário de Comparecimento (oculto por padrão) -->
         <div id="comparecimento-content" class="document-content">
             <form id="comparecimento-form" method="post" action="">
+                <input type="hidden" name="id_paciente"
+                    value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
                 <div class="row g-3">
-                    <div class="col-12">
-                        <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
-                        <input type="text" class="form-control" id="nome_paciente_comp" name="nome_paciente" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label for="data_nascimento" class="form-label">Data de Nascimento:</label>
-                        <input type="date" class="form-control" id="data_nascimento" name="data_nascimento" required>
-                    </div>
+
                     <div class="col-md-6">
                         <label for="data_atendimento" class="form-label">Data da Consulta:</label>
                         <input type="date" class="form-control" id="data_atendimento" name="data_atendimento" required>
@@ -481,16 +204,9 @@ $paciente_identificacao = htmlspecialchars($_SESSION['resultado_consulta']['id_a
         </div>
         <div id="recibo-content" class="document-content">
             <form id="recibo-form" method="post" action="">
+                <input type="hidden" name="id_paciente"
+                    value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
                 <div class="row g-3">
-                    <div class="col-12">
-                        <label for="nome_paciente_comp" class="form-label">Nome do Paciente:</label>
-                        <input type="text" class="form-control" id="nome_paciente_recibo" name="nome_paciente" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label for="cpf" class="form-label required-field">CPF do paciente</label>
-                        <input type="text" class="form-control" onblur="validarCPF(this)" id="cpf" name="cpf" required>
-                        <div id="cpf-mensagem" class="mensagem-erro"></div>
-                    </div>
                     <div class="col-12 mt-2">
                         <div class="btn-group">
                             <button type="submit" class="btn " name="gerar_recibo">
@@ -506,6 +222,8 @@ $paciente_identificacao = htmlspecialchars($_SESSION['resultado_consulta']['id_a
         </div>
         <div id="consulta-content" class="document-content">
             <form method="POST" action="" id="consulta_form">
+                <input type="hidden" name="id_paciente"
+                    value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
                 <div class="row g-3">
                     <div class="col-md-12">
                         <label for="nome_paciente" class="form-label">Nome do Paciente:</label>
@@ -562,7 +280,7 @@ $paciente_identificacao = htmlspecialchars($_SESSION['resultado_consulta']['id_a
                                         <div class="card-body">
                                             <textarea name="observacoes" rows="5" style="min-height: 150px;"
                                                 class="form-control"><?= htmlspecialchars($_SESSION['resultado_consulta']['observacao_paciente'] ?? '') ?>
-                                                    </textarea>
+                                                                                                    </textarea>
                                         </div>
                                         <div class="card-footer text-end">
                                             <button type="submit" class="btn btn-primary" name="salvar_observacoes">
@@ -586,131 +304,69 @@ $paciente_identificacao = htmlspecialchars($_SESSION['resultado_consulta']['id_a
             <?php endif; ?>
         </div>
         <?php unset($_SESSION['resultado_consulta'], $_SESSION['nome_buscado']); ?>
+
+        <div id="informacoes-content" class="document-content">
+
+            <h1>Consulta de Documentos Médicos</h1>
+
+            <form id="consultaForm" method="POST" action="">
+                <div class="filtro-option">
+                    <input type="radio" id="filtroData" name="filtro" value="data_criacao">
+                    <label for="filtroData">Data de Criação</label>
+                    <div class="filtro-input" id="inputData">
+                        <label for="dataInicio">Data Início:</label>
+                        <input type="date" id="dataInicio" name="dataInicio">
+                        <label for="dataFim">Data Fim:</label>
+                        <input type="date" id="dataFim" name="dataFim">
+                    </div>
+                </div>
+
+                <div class="filtro-option">
+                    <input type="radio" id="filtroTipo" name="filtro" value="tipo_documento">
+                    <label for="filtroTipo">Tipos de Declaração</label>
+                    <div class="filtro-input" id="inputTipo">
+                        <select id="tipoDocumento" name="tipoDocumento">
+                            <option value="">Selecione um tipo</option>
+                            <option value="recibo">recibo</option>
+                            <option value="atestado">Atestado</option>
+                            <option value="comparecimento">comparecimento</option>
+                        </select>
+                    </div>
+                </div>
+
+               
+
+                <div class="filtro-option">
+                    <input type="radio" id="filtroCPF" name="filtro" value="cpf_paciente">
+                    <label for="filtroCPF">CPF do Paciente</label>
+                    <div class="filtro-input" id="inputCPF">
+                        <input type="text" id="cpfPaciente" name="cpfPaciente"
+                            placeholder="Digite o CPF (somente números)"
+                            onblur="validarCPF(this)" maxlength="11">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-consultar" name="gerar_consulta">Consultar</button>
+            </form>
+
+            <div id="resultadoConsulta">
+            <?php
+        if (isset($resultados)) {
+            $consulPdf->exibirResultado($resultados);
+        } elseif (isset($erro)) {
+            echo '<div class="error">'.$erro.'</div>';
+        }
+        ?>
+            </div>
+        </div>
+
     </div>
 
-    <div id="informacoes-content" class="document-content">
-        <h2>Informações Adicionais</h2>
-        <p>Conteúdo da aba de informações...</p>
-    </div>
-    </div>
     <?php echo $psi->exibirModalLogin() ?>
     <!-- Bootstrap JS Bundle + Popper -->
+    <script src="script/script.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script>
-        function showDocument(documentType) {
-            // Esconde todos os conteúdos
-            document.querySelectorAll('.document-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            // Remove a classe active de todas as abas
-            document.querySelectorAll('.document-tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            // Mostra o conteúdo selecionado
-            document.getElementById(documentType + '-content').classList.add('active');
-            // Ativa a aba selecionada
-            event.currentTarget.classList.add('active');
-        }
-        // Melhorar a experiência em dispositivos móveis
-        document.addEventListener('DOMContentLoaded', function () {
-            // Ajustar altura dos textareas
-            const textareas = document.querySelectorAll('textarea');
-            textareas.forEach(textarea => {
-                textarea.style.minHeight = '100px';
-                textarea.addEventListener('focus', function () {
-                    this.style.minHeight = '150px';
-                });
-                textarea.addEventListener('blur', function () {
-                    if (!this.value) {
-                        this.style.minHeight = '100px';
-                    }
-                });
-            });
-            // Suavizar rolagem nas abas em mobile
-            const tabsContainer = document.querySelector('.document-tabs');
-            if (tabsContainer && tabsContainer.scrollWidth > tabsContainer.clientWidth) {
-                tabsContainer.classList.add('scroll-snap');
-            }
-            // Ativar a primeira aba por padrão se nenhuma estiver ativa
-            if (!document.querySelector('.document-tab.active')) {
-                const firstTab = document.querySelector('.document-tab');
-                if (firstTab) {
-                    firstTab.classList.add('active');
-                    const firstContent = document.querySelector('.document-content');
-                    if (firstContent) firstContent.classList.add('active');
-                }
-            }
-        });
-        function validarCPF(input) {
-            // Obtém o valor do campo
-            const cpf = input.value;
-            // Remove caracteres não numéricos
-            const cpfLimpo = cpf.replace(/\D/g, '');
-            // Verifica se tem 11 dígitos ou se é uma sequência de dígitos iguais
-            if (cpfLimpo.length !== 11 || /^(\d)\1{10}$/.test(cpfLimpo)) {
-                mostrarErro(input, 'CPF inválido');
-                return false;
-
-                // Validação do primeiro dígito verificador
-                let soma = 0;
-                for (let i = 0; i < 9; i++) {
-                    soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
-                }
-                let resto = (soma * 10) % 11;
-                resto = resto === 10 ? 0 : resto;
-                if (resto !== parseInt(cpfLimpo.charAt(9))) {
-                    mostrarErro(input, 'CPF inválido');
-                    return false;
-                }
-                // Validação do segundo dígito verificador
-                soma = 0;
-                for (let i = 0; i < 10; i++) {
-                    soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
-                }
-                resto = (soma * 10) % 11;
-                resto = resto === 10 ? 0 : resto;
-                if (resto !== parseInt(cpfLimpo.charAt(10))) {
-                    mostrarErro(input, 'CPF inválido');
-                    return false;
-                }
-                // Formata e mostra como válido
-                input.value = formatarCPF(cpfLimpo);
-                mostrarErro(input, '', true);
-                return true;
-            }
-        }
-        function formatarCPF(cpf) {
-            return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-        }
-        function mostrarErro(input, mensagem, valido = false) {
-            const mensagemElemento = document.getElementById('cpf-mensagem');
-            mensagemElemento.textContent = mensagem;
-            if (valido) {
-                input.classList.remove('invalido');
-                input.classList.add('valido');
-                mensagemElemento.style.color = 'green';
-            } else {
-                input.classList.remove('valido');
-                input.classList.add('invalido');
-                mensagemElemento.style.color = 'red';
-            }
-        }
-        document.addEventListener('DOMContentLoaded', function () {
-            // Opcional: Ajustar altura automaticamente conforme o conteúdo
-            textarea.style.height = 'auto';
-            textarea.style.height = (textarea.scrollHeight) + 'px';
-        });
-        function abrirModal() {
-            document.getElementById('loginModal').style.display = 'block';
-            document.getElementById('overlay').style.display = 'block';
-            document.body.classList.add('modal-open');
-        }
-        function fecharModal() {
-            document.getElementById('loginModal').style.display = 'none';
-            document.getElementById('overlay').style.display = 'none';
-            document.body.classList.remove('modal-open');
-        }
-    </script>
 </body>
+
 </html>
