@@ -6,7 +6,7 @@ class Conexao {
     public static function getConnection() {
         if (!isset(self::$conn)) {
             try {
-                self::$conn = new PDO("mysql:host=localhost:3307;dbname=anamnese", "root", "");
+                self::$conn = new PDO("mysql:host=localhost:3306;dbname=anamnese", "root", "");
                 self::$conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             } catch(PDOException $e) {
                 die("Erro na conexão: " . $e->getMessage());

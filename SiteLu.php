@@ -67,8 +67,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 if (isset($_COOKIE['resultado_consulta'])) {
     $_SESSION['resultado_consulta'] = json_decode($_COOKIE['resultado_consulta'], true);
 }
-// var_dump($_SESSION['resultado_consulta']['id_anam']);
-
 
 if (isset($_COOKIE['nome_buscado'])) {
     $_SESSION['nome_buscado'] = $_COOKIE['nome_buscado'];
@@ -107,26 +105,26 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
     </nav>
     <!-- Container Principal -->
     <div class="container mt-3 mt-md-4">
-        <!-- Abas de Documentos Responsivas -->
-        <div class="document-tabs">
-            <div class="document-tab active" onclick="showDocument('atestado')">
-                <i class="bi bi-file-earmark-medical d-none d-md-inline"></i> Atestado
-            </div>
-            <div class="document-tab" onclick="showDocument('comparecimento')">
-                <i class="bi bi-calendar-check d-none d-md-inline"></i> Comparecimento
-            </div>
-            <div class="document-tab" onclick="showDocument('recibo')">
-                <i class="bi bi-receipt d-none d-md-inline"></i> Recibo
-            </div>
-            <div class="document-tab" onclick="showDocument('consulta')">
-                <i class="bi bi-receipt d-none d-md-inline"></i> Consulta
-            </div>
-            <div class="document-tab" onclick="showDocument('informacoes')" style="flex-shrink: 0;">
-                <i class="bi bi-info-circle d-none d-md-inline"></i> Informações
-            </div>
+    <!-- Abas de Documentos Responsivas -->
+    <div class="document-tabs">
+        <div class="document-tab" onclick="showDocument('atestado', this)">
+            <i class="bi bi-file-earmark-medical d-none d-md-inline"></i> Atestado
         </div>
+        <div class="document-tab" onclick="showDocument('comparecimento', this)">
+            <i class="bi bi-calendar-check d-none d-md-inline"></i> Comparecimento
+        </div>
+        <div class="document-tab" onclick="showDocument('recibo', this)">
+            <i class="bi bi-receipt d-none d-md-inline"></i> Recibo
+        </div>
+        <div class="document-tab" onclick="showDocument('consulta', this)">
+            <i class="bi bi-receipt d-none d-md-inline"></i> Consulta
+        </div>
+        <div class="document-tab" onclick="showDocument('informacoes', this)" style="flex-shrink: 0;">
+            <i class="bi bi-info-circle d-none d-md-inline"></i> Informações
+        </div>
+    </div>
         <!-- Formulário de Atestado (visível por padrão) -->
-        <div id="atestado-content" class="document-content active">
+        <div id="atestado-content" class="document-content">
             <form id="atestado-form" method="post" action="">
                 <input type="hidden" name="id_paciente"
                     value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
@@ -360,7 +358,6 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
         ?>
             </div>
         </div>
-
     </div>
 
     <?php echo $psi->exibirModalLogin() ?>

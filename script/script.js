@@ -1,45 +1,64 @@
-
-function showDocument(documentType) {
+function showDocument(documentType, element) {
+    // Salva no localStorage
+    localStorage.setItem('ultimaAbaAtiva', documentType);
+    
     // Esconde todos os conteúdos
     document.querySelectorAll('.document-content').forEach(content => {
-        content.classList.remove('active');
+        content.style.display = 'none';
     });
+    
     // Remove a classe active de todas as abas
     document.querySelectorAll('.document-tab').forEach(tab => {
         tab.classList.remove('active');
     });
+    
     // Mostra o conteúdo selecionado
-    document.getElementById(documentType + '-content').classList.add('active');
+    const content = document.getElementById(documentType + '-content');
+    if (content) {
+        content.style.display = 'block';
+    }
+    
     // Ativa a aba selecionada
-    event.currentTarget.classList.add('active');
+    if (element) {
+        element.classList.add('active');
+    }
 }
-// Melhorar a experiência em dispositivos móveis
-document.addEventListener('DOMContentLoaded', function () {
-    // Ajustar altura dos textareas
+
+// Carregar a última aba ativa
+document.addEventListener('DOMContentLoaded', function() {
+    // Ajustes para mobile
     const textareas = document.querySelectorAll('textarea');
     textareas.forEach(textarea => {
         textarea.style.minHeight = '100px';
-        textarea.addEventListener('focus', function () {
+        textarea.addEventListener('focus', function() {
             this.style.minHeight = '150px';
         });
-        textarea.addEventListener('blur', function () {
+        textarea.addEventListener('blur', function() {
             if (!this.value) {
                 this.style.minHeight = '100px';
             }
         });
     });
+
     // Suavizar rolagem nas abas em mobile
     const tabsContainer = document.querySelector('.document-tabs');
     if (tabsContainer && tabsContainer.scrollWidth > tabsContainer.clientWidth) {
         tabsContainer.classList.add('scroll-snap');
     }
-    // Ativar a primeira aba por padrão se nenhuma estiver ativa
-    if (!document.querySelector('.document-tab.active')) {
+
+    // Restaurar última aba ou ativar a primeira
+    const ultimaAba = localStorage.getItem('ultimaAbaAtiva');
+    if (ultimaAba) {
+        const aba = document.querySelector(`.document-tab[onclick*="${ultimaAba}"]`);
+        if (aba) {
+            // Simula o clique na aba
+            showDocument(ultimaAba, aba);
+        }
+    } else {
+        // Ativa a primeira aba por padrão
         const firstTab = document.querySelector('.document-tab');
         if (firstTab) {
-            firstTab.classList.add('active');
-            const firstContent = document.querySelector('.document-content');
-            if (firstContent) firstContent.classList.add('active');
+            showDocument('atestado', firstTab);
         }
     }
 });
@@ -147,16 +166,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    const dataInicio = document.getElementById('dataInicio');
-    const dataFim = document.getElementById('dataFim');
 
-    if (dataInicio && dataFim) {
-        dataFim.addEventListener('change', function () {
-            if (dataInicio.value && this.value < dataInicio.value) {
-                alert('A data final não pode ser anterior à data inicial');
-                this.value = '';
-            }
-        });
-    }
 });
 
