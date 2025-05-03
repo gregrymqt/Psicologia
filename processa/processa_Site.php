@@ -10,10 +10,10 @@ require_once __DIR__ . '/../vendor/autoload.php'; // ou o caminho correto$vali =
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
-if(isset($_COOKIE['resultado_consulta'])) {
+if (isset($_COOKIE['resultado_consulta'])) {
     $_SESSION['resultado_consulta'] = json_decode($_COOKIE['resultado_consulta'], true);
 }
-if(isset($_COOKIE['nome_buscado'])) {
+if (isset($_COOKIE['nome_buscado'])) {
     $_SESSION['nome_buscado'] = $_COOKIE['nome_buscado'];
 }
 
@@ -48,8 +48,8 @@ class Consulta
                 $_SESSION['resultado_consulta'] = $stmt->fetch(PDO::FETCH_ASSOC);
                 $_SESSION['nome_buscado'] = $nomePaciente;
 
-                setcookie('resultado_consulta', json_encode($_SESSION['resultado_consulta']), time() + (86400 * 30), "/"); // Válido por 30 dias
-                setcookie('nome_buscado', $nomePaciente, time() + (86400 * 30), "/");
+                setcookie('resultado_consulta', json_encode($_SESSION['resultado_consulta']), time() + 1800, "/"); // Válido por 30 dias
+                setcookie('nome_buscado', $nomePaciente, time() + 1800, "/");
 
 
             } catch (PDOException $e) {
@@ -69,77 +69,76 @@ class Consulta
 
 class ConsultaPfd
 {
-    private  $conn;
+    private $conn;
     public function __construct()
     {
         $this->conn = Conexao::getConnection();
     }
-        public function consultaPdfs()
-        {
-            try {
-                $sql = "SELECT data_criacao, tipo_documento, cpf_paciente, nome_paciente FROM anamnese_pdfs WHERE 1=1";
-                $params = [];
-                // Se nenhum filtro foi selecionado
+    public function consultaPdfs()
+    {
+        try {
+            $sql = "SELECT data_criacao, tipo_documento, cpf_paciente, nome_paciente FROM anamnese_pdfs WHERE 1=1";
+            $params = [];
+            // Se nenhum filtro foi selecionado
             if (!isset($_POST['filtro']) || empty($_POST['filtro'])) {
                 $sql = "SELECT data_criacao, tipo_documento, cpf_paciente, nome_paciente 
                         FROM anamnese_pdfs 
                         ORDER BY data_criacao DESC 
                         LIMIT 100";
-            } 
-            else {
-                    switch ($_POST['filtro']) {
-                        case 'data_criacao':
-                            if (!empty($_POST['dataInicio'])) {
-                                $sql .= " AND data_criacao = :dataInicio ";
-                                $params[':dataInicio'] = $_POST['dataInicio'];
-                            }
-                            break;
-                        case 'tipo_documento':
-                            if (!empty($_POST['tipoDocumento'])) {
-                                $sql .= " AND tipo_documento = :tipoDocumento";
-                                $params[':tipoDocumento'] = $_POST['tipoDocumento'];
-                            }
-                            break;
-                        case 'cpf_paciente':
-                            if (!empty($_POST['cpfPaciente'])) {
-                                $sql .= " AND cpf_paciente = :cpfPaciente";
-                                $params[':cpfPaciente'] = $_POST['cpfPaciente'];
-                            }
-                            break;
-                    }
+            } else {
+                switch ($_POST['filtro']) {
+                    case 'data_criacao':
+                        if (!empty($_POST['dataInicio'])) {
+                            $sql .= " AND data_criacao = :dataInicio ";
+                            $params[':dataInicio'] = $_POST['dataInicio'];
+                        }
+                        break;
+                    case 'tipo_documento':
+                        if (!empty($_POST['tipoDocumento'])) {
+                            $sql .= " AND tipo_documento = :tipoDocumento";
+                            $params[':tipoDocumento'] = $_POST['tipoDocumento'];
+                        }
+                        break;
+                    case 'cpf_paciente':
+                        if (!empty($_POST['cpfPaciente'])) {
+                            $sql .= " AND cpf_paciente = :cpfPaciente";
+                            $params[':cpfPaciente'] = $_POST['cpfPaciente'];
+                        }
+                        break;
                 }
-                // Prepara e executa a query
-                $stmt = $this->conn->prepare($sql);
-                $stmt->execute($params);
-                return $stmt->fetchAll(PDO::FETCH_ASSOC);
-            } catch (PDOException $e) {
-                throw new Exception('Erro ao consultar o banco: ' . $e->getMessage());
             }
+            // Prepara e executa a query
+            $stmt = $this->conn->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            throw new Exception('Erro ao consultar o banco: ' . $e->getMessage());
+        }
     }
     public function exibirResultado($resultados)
     {
-        
-            if (!empty($resultados)) {
-                echo '<h2>Resultados da Consulta</h2>';
-                echo '<div class="table-responsive">';
-                echo '<table class="table table-striped">';
-                echo '<thead><tr><th>Data</th><th>Tipo</th><th>CPF</th><th>Nome paciente</th></tr></thead>';
-                echo '<tbody>';
 
-                foreach ($resultados as $row) {
-                    echo '<tr>';
-                    echo '<td>' . htmlspecialchars($row['data_criacao']) . '</td>';
-                    echo '<td>' . htmlspecialchars($row['tipo_documento']) . '</td>';
-                    echo '<td>' . htmlspecialchars($row['cpf_paciente']) . '</td>';
-                    echo '<td>' . htmlspecialchars($row['nome_paciente']) . '</td>';
-                    echo '</tr>';
-                }
+        if (!empty($resultados)) {
+            echo '<h2>Resultados da Consulta</h2>';
+            echo '<div class="table-responsive">';
+            echo '<table class="table table-striped">';
+            echo '<thead><tr><th>Data</th><th>Tipo</th><th>CPF</th><th>Nome paciente</th></tr></thead>';
+            echo '<tbody>';
 
-                echo '</tbody></table></div>';
-            } else {
-                echo '<div class="alert alert-info">Nenhum documento encontrado.</div>';
+            foreach ($resultados as $row) {
+                echo '<tr>';
+                echo '<td>' . htmlspecialchars($row['data_criacao']) . '</td>';
+                echo '<td>' . htmlspecialchars($row['tipo_documento']) . '</td>';
+                echo '<td>' . htmlspecialchars($row['cpf_paciente']) . '</td>';
+                echo '<td>' . htmlspecialchars($row['nome_paciente']) . '</td>';
+                echo '</tr>';
             }
-        
+
+            echo '</tbody></table></div>';
+        } else {
+            echo '<div class="alert alert-info">Nenhum documento encontrado.</div>';
+        }
+
     }
 }
 
@@ -154,7 +153,6 @@ class Psicologa
             // Você pode querer recarregar os dados do usuário aqui
         }
         $this->verificarPsico();
-        $this->processarLogout();
     }
     function verificarIdentidade($email, $senha)
     {
@@ -221,36 +219,6 @@ class Psicologa
             }
         }
     }
-    private function processarLogout()
-    {
-        if (isset($_GET['logout'])) {
-            // Limpa os cookies
-            setcookie('logado', '', time() - 3600, '/');
-            setcookie('usuario_id', '', time() - 3600, '/');
-            // Destrói a sessão
-            session_unset();
-            session_destroy();
-            header("Location: " . $_SERVER['PHP_SELF']);
-            exit();
-        }
-    }
-    public function exibirBotoesAuth()
-    {
-        return '<div class="auth-buttons" style="position: static; margin-left: auto;">' .
-            (isset($_SESSION['usuario']) ? $this->botaoLogout() : $this->botaoLogin()) .
-            '</div>';
-    }
-    private function botaoLogin()
-    {
-        return '<button class="btn btn-outline-primary" onclick="abrirModal()">
-    <i class="bi bi-box-arrow-in-right"></i> Login</button>';
-    }
-    private function botaoLogout()
-    {
-        return '<button class="btn btn-outline-primary" onclick="window.location.href=\'?logout=1\'">
-            <i class="bi bi-box-arrow-right"></i> Sair
-            </button>';
-    }
     public function exibirModalLogin()
     {
         return '
@@ -294,4 +262,100 @@ class Psicologa
     }
 }
 
+
+
+class AuthSystem 
+{
+    // Constantes para tipos de usuário
+    const PSICOLOGO = 'psi';
+    const PACIENTE = 'user';
+    private $psicologa;
+
+    
+    public function __construct() {
+        $this->psicologa = new Psicologa();
+    }
+
+    // Método principal para exibir os botões de autenticação
+    public function exibirBotoesAuth($tipoUsuario = null) {
+        if ($tipoUsuario === self::PSICOLOGO) {
+            // Para psicólogo: mostra login ou logout
+            echo '<div class="auth-buttons">';
+            if (!isset($_SESSION['usuario'])) {
+                echo $this->botaoLogin();
+            } else {
+                echo $this->botaoLogout($tipoUsuario);
+            }
+            echo '</div>';
+        } 
+        elseif ($tipoUsuario === self::PACIENTE && isset($_SESSION['resultado_consulta'])) {
+            // Para paciente: só mostra logout se estiver logado
+            echo '<div class="auth-buttons">';
+            echo $this->botaoLogout($tipoUsuario);
+            echo '</div>';
+        }
+    }
+
+
+    // Verifica se há algum usuário logado
+
+    // Botão de logout com tratamento diferenciado
+    private function botaoLogout($tipoUsuario) {
+        if ($tipoUsuario === self::PSICOLOGO) {
+            return '<form method="post" class="d-inline">
+                      <button type="submit" name="logoutPsi" class="btn btn-outline-primary">
+                        <i class="bi bi-box-arrow-right"></i> Sair como Psicólogo
+                      </button>
+                    </form>';
+        } else {
+            return '<form method="post" class="d-inline">
+                      <button type="submit" name="logoutPaci" class="btn btn-outline-danger">
+                        <i class="bi bi-box-arrow-right"></i> Sair como Paciente
+                      </button>
+                    </form>';
+        }
+    }
+
+    private function botaoLogin() {
+        return '<button class="btn btn-outline-success" onclick="abrirModal()">
+                <i class="bi bi-box-arrow-in-right"></i> Entrar
+                </button>';
+    }
+
+    public function exibirEstruturaCompleta() {
+        return $this->botaoLogin() . $this->psicologa->exibirModalLogin();
+    }
+
+    // Processa o logout quando solicitado
+    public function processarLogout()
+    {
+        if ($_SERVER["REQUEST_METHOD"] === "POST") {
+            if (isset($_POST['logoutPsi'])) {
+                $this->realizarLogout(self::PSICOLOGO);
+                if (isset($_POST['logoutPaci'])) {
+                    $this->realizarLogout(self::PACIENTE);
+                }
+            }
+    }}
+
+    // Executa o logout de fato
+    private function realizarLogout($tipo) {
+        if ($tipo === self::PSICOLOGO) {
+            unset($_SESSION['usuario']);
+        } elseif ($tipo === self::PACIENTE) {
+            unset($_SESSION['resultado_consulta']);
+        }
+        }
+
+    // Método para verificar o tipo de usuário logado
+    public function getTipoUsuarioLogado()
+    {
+        if (isset($_SESSION['usuario'])) {
+            return self::PSICOLOGO;
+        } elseif (isset($_SESSION['resultado_consulta'])) {
+            return self::PACIENTE;
+        }
+        return null;
+    }
+}
 

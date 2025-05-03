@@ -1,7 +1,6 @@
 <?php
 // 1. INICIAR SESSÃO (DEVE SER SEMPRE A PRIMEIRA LINHA)
 ob_start();
-session_start();
 // 2. INCLUIR DEPENDÊNCIAS
 require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
 require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
@@ -20,7 +19,7 @@ class ProcessaPdfs
     public function __construct()
     {
         $this->configurarImg(); // Configura automaticamente ao instanciar
-         $this->basePath = realpath('/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/caminho/pdf');
+         $this->basePath = realpath('C:/xampp/htdocs/TiaLu/caminho/pdf');
         // Garante que o diretório base existe
         if (!file_exists($this->basePath)) {
             if (!mkdir($this->basePath, 0755, true)) {
@@ -30,7 +29,7 @@ class ProcessaPdfs
     }
     public function configurarImg()
     {
-        $this->logoPath = '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/img/marcaDaguaLu.jpeg';
+        $this->logoPath = 'C:/xampp/htdocs/TiaLu/img/marcaDaguaLu.jpeg';
         // 3. Verificações robustas
         if (!file_exists($this->logoPath)) {
             die("ERRO: Imagem não encontrada em: " . realpath($this->logoPath));
