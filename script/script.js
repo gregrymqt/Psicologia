@@ -149,6 +149,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 1. Controle dos Filtros
     filtroInputs.forEach(input => input.style.display = 'none');
+
+    if (!document.querySelector('input[name="filtro"]:checked') && filtroRadios.length > 0) {
+        filtroRadios[0].checked = true;
+    }
+    
     filtroRadios.forEach(radio => {
         if (radio.checked) {
             const inputId = 'input' + radio.id.replace('filtro', '');
