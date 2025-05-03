@@ -296,24 +296,23 @@ class AuthSystem
         }
     }
 
-
-    // Verifica se há algum usuário logado
-
     // Botão de logout com tratamento diferenciado
     private function botaoLogout($tipoUsuario) {
-        if ($tipoUsuario === self::PSICOLOGO) {
-            return '<form method="post" class="d-inline">
-                      <button type="submit" name="logoutPsi" class="btn btn-outline-primary">
-                        <i class="bi bi-box-arrow-right"></i> Sair como Psicólogo
-                      </button>
-                    </form>';
-        } else {
+
+        if($tipoUsuario === self::PACIENTE) {
             return '<form method="post" class="d-inline">
                       <button type="submit" name="logoutPaci" class="btn btn-outline-danger">
                         <i class="bi bi-box-arrow-right"></i> Sair como Paciente
                       </button>
                     </form>';
         }
+        elseif ($tipoUsuario === self::PSICOLOGO) {
+            return '<form method="post" class="d-inline">
+                      <button type="submit" name="logoutPsi" class="btn btn-outline-primary">
+                        <i class="bi bi-box-arrow-right"></i> Sair como Psicólogo
+                      </button>
+                    </form>';
+        } 
     }
 
     private function botaoLogin() {
@@ -327,25 +326,32 @@ class AuthSystem
     }
 
     // Processa o logout quando solicitado
-    public function processarLogout()
-    {
+    public function processarLogout() {
         if ($_SERVER["REQUEST_METHOD"] === "POST") {
-            if (isset($_POST['logoutPsi'])) {
+            // Logout Psicólogo
+            if (isset($_POST['logoutPsi']) && isset($_SESSION['usuario'])) {
                 $this->realizarLogout(self::PSICOLOGO);
-                if (isset($_POST['logoutPaci'])) {
-                    $this->realizarLogout(self::PACIENTE);
-                }
+                header("Location: ".$_SERVER['PHP_SELF']);
+                exit;
             }
-    }}
+            // Logout Paciente
+            elseif (isset($_POST['logoutPaci']) && isset($_SESSION['resultado_consulta'])) {
+                $this->realizarLogout(self::PACIENTE);
+                header("Location: ".$_SERVER['PHP_SELF']);
+                exit;
+            }
+        }
+    }
 
     // Executa o logout de fato
     private function realizarLogout($tipo) {
         if ($tipo === self::PSICOLOGO) {
             unset($_SESSION['usuario']);
         } elseif ($tipo === self::PACIENTE) {
-            unset($_SESSION['resultado_consulta']);
+            unset($_SESSION['resultado_consulta']);      
         }
-        }
+ 
+    }
 
     // Método para verificar o tipo de usuário logado
     public function getTipoUsuarioLogado()

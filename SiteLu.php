@@ -9,7 +9,6 @@ $consul = new Consulta();
 $pdf = new ProcessaPdfs();
 $consulPdf = new ConsultaPfd(); // Certifique-se que a classe está disponível
 $auth = new AuthSystem();
-$auth->processarLogout();
 
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
@@ -225,32 +224,26 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
             </form>
         </div>
         <div id="consulta-content" class="document-content">
-        <form method="POST" action="" id="consulta_form">
-    <input type="hidden" name="id_paciente"
-        value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
-    <div class="row g-3">
-        <div class="col-md-12">
-            <label for="nome_paciente" class="form-label">Nome do Paciente:</label>
-            <input type="text" class="form-control" id="nome_paciente" name="nome_paciente"
-                value="<?= isset($_SESSION['nome_buscado']) ? htmlspecialchars($_SESSION['nome_buscado']) : '' ?>"
-                required autofocus>
-        </div>
-        <div class="col-md-12 text-center mt-3">
-            <div class="btn-group">
-                <button type="submit" class="btn " name="consul_paci">
-                    <i class="bi bi-file-earmark-pdf"></i> Consulta
-                </button>
-            </div>
-            <?php
-            // Exibe o botão de logout apenas se existirem resultados
-            
-                
-                echo '<div class="mt-3">' .  $auth->exibirBotoesAuth(AuthSystem::PACIENTE). '</div>';
-            
-            ?>
-        </div>
-    </div>
-</form>
+            <form method="POST" action="" id="consulta_form">
+                <input type="hidden" name="id_paciente"
+                    value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
+                <div class="row g-3">
+                    <div class="col-md-12">
+                        <label for="nome_paciente" class="form-label">Nome do Paciente:</label>
+                        <input type="text" class="form-control" id="nome_paciente" name="nome_paciente"
+                            value="<?= isset($_SESSION['nome_buscado']) ? htmlspecialchars($_SESSION['nome_buscado']) : '' ?>"
+                            required autofocus>
+                    </div>
+                    <div class="col-md-12 text-center mt-3">
+                        <div class="btn-group">
+                            <button type="submit" class="btn " name="consul_paci">
+                                <i class="bi bi-file-earmark-pdf"></i> Consulta
+                            </button>
+                        </div>
+  <?php echo $auth->exibirBotoesAuth(AuthSystem::PACIENTE); ?>
+                    </div>
+                </div>
+            </form>
             <!-- Exibição de erros -->
             <?php if (isset($_SESSION['erro'])): ?>
                 <div class="alert alert-danger mt-3">
@@ -291,7 +284,7 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
                                         <div class="card-body">
                                             <textarea name="observacoes" rows="5" style="min-height: 150px;"
                                                 class="form-control"><?= htmlspecialchars($_SESSION['resultado_consulta']['observacao_paciente'] ?? '') ?>
-                                                                                                                    </textarea>
+                                                                                                                            </textarea>
                                         </div>
                                         <div class="card-footer text-end">
                                             <button type="submit" class="btn btn-primary" name="salvar_observacoes">
