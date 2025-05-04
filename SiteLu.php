@@ -8,12 +8,18 @@ $psi = new Psicologa();
 $consul = new Consulta();
 $pdf = new ProcessaPdfs();
 $consulPdf = new ConsultaPfd(); // Certifique-se que a classe está disponível
-$auth = new AuthSystem();
+$autenticacao = new Autenticacao();
 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+// Processar logout se necessário
+$autenticacao->processarLogout();
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Verificação CSRF mais segura
+    if (empty($_POST['csrf_token']) || !isset($_SESSION['csrf_token']) || 
+        !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        http_response_code(403);
+        die('Erro de segurança: Token CSRF inválido');
+    }
     if (isset($_POST["gerar_recibo"])) {
         try {
             $pdf->gerarRecibo($_SESSION['resultado_consulta']['id_anam']);
@@ -66,14 +72,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     header('SiteLu.php');
 }
 
-
-if (isset($_COOKIE['resultado_consulta'])) {
-    $_SESSION['resultado_consulta'] = json_decode($_COOKIE['resultado_consulta'], true);
-}
-
-if (isset($_COOKIE['nome_buscado'])) {
-    $_SESSION['nome_buscado'] = $_COOKIE['nome_buscado'];
-}
 $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
 $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
 $emailUsuario = htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8');
@@ -102,7 +100,8 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
             </div>
             <!-- Botão de Login (só aparece se não logado) -->
             <div class="d-flex">
-                <?php echo $auth->exibirBotoesAuth(AuthSystem::PSICOLOGO); ?>
+                <?php $autenticacao->exibirBotoesAuth(Autenticacao::PSICOLOGO);
+                ?>
             </div>
         </div>
     </nav>
@@ -129,8 +128,7 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
         <!-- Formulário de Atestado (visível por padrão) -->
         <div id="atestado-content" class="document-content">
             <form id="atestado-form" method="post" action="">
-                <input type="hidden" name="id_paciente"
-                    value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label for="hora_inicio" class="form-label">Horário de Início:</label>
@@ -172,8 +170,7 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
         <!-- Formulário de Comparecimento (oculto por padrão) -->
         <div id="comparecimento-content" class="document-content">
             <form id="comparecimento-form" method="post" action="">
-                <input type="hidden" name="id_paciente"
-                    value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <div class="row g-3">
 
                     <div class="col-md-6">
@@ -207,9 +204,8 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
         </div>
         <div id="recibo-content" class="document-content">
             <form id="recibo-form" method="post" action="">
-                <input type="hidden" name="id_paciente"
-                    value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
-                <div class="row g-3">
+            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+            <div class="row g-3">
                     <div class="col-12 mt-2">
                         <div class="btn-group">
                             <button type="submit" class="btn " name="gerar_recibo">
@@ -225,9 +221,8 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
         </div>
         <div id="consulta-content" class="document-content">
             <form method="POST" action="" id="consulta_form">
-                <input type="hidden" name="id_paciente"
-                    value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
-                <div class="row g-3">
+            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+            <div class="row g-3">
                     <div class="col-md-12">
                         <label for="nome_paciente" class="form-label">Nome do Paciente:</label>
                         <input type="text" class="form-control" id="nome_paciente" name="nome_paciente"
@@ -240,7 +235,8 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
                                 <i class="bi bi-file-earmark-pdf"></i> Consulta
                             </button>
                         </div>
-  <?php echo $auth->exibirBotoesAuth(AuthSystem::PACIENTE); ?>
+                        <?php $autenticacao->exibirBotoesAuth(Autenticacao::PACIENTE);
+                        ?>
                     </div>
                 </div>
             </form>
@@ -284,7 +280,7 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
                                         <div class="card-body">
                                             <textarea name="observacoes" rows="5" style="min-height: 150px;"
                                                 class="form-control"><?= htmlspecialchars($_SESSION['resultado_consulta']['observacao_paciente'] ?? '') ?>
-                                                                                                                            </textarea>
+                                                                                                                                            </textarea>
                                         </div>
                                         <div class="card-footer text-end">
                                             <button type="submit" class="btn btn-primary" name="salvar_observacoes">
@@ -307,13 +303,13 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
                 </div>
             <?php endif; ?>
         </div>
-        <?php unset($_SESSION['resultado_consulta'], $_SESSION['nome_buscado']); ?>
 
         <div id="informacoes-content" class="document-content">
 
             <h1>Consulta de Documentos Médicos</h1>
 
             <form id="consultaForm" method="POST" action="">
+            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <div class="filtro-option">
                     <input type="radio" id="filtroData" name="filtro" value="data_criacao">
                     <label for="filtroData">Data de Criação</label>

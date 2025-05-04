@@ -1,24 +1,42 @@
 <?php
-// 1. INICIAR SESSÃO (DEVE SER SEMPRE A PRIMEIRA LINHA)
-ob_start();
-session_start();
+// Configurações seguras de sessão
+session_name('SESSECURE');
+session_start([
+    'cookie_lifetime' => 3600,
+    'cookie_secure' => true,       // Só envia por HTTPS
+    'cookie_httponly' => true,     // Inacessível via JS
+    'cookie_samesite' => 'Strict', // Proteção contra CSRF
+    'use_strict_mode' => true      // Melhora a segurança
+]);
+
+// Geração do token CSRF
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// Controle de inatividade (corrigido o typo)
+if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY'] > 3600)) {
+    session_unset();
+    session_destroy();
+    session_start(); // Reinicia para nova sessão
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$_SESSION['LAST_ACTIVITY'] = time();
 // 2. INCLUIR DEPENDÊNCIAS
 require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
 require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
 require_once __DIR__ . '/../vendor/autoload.php'; // ou o caminho correto$vali = new Vali();
 
-use Dompdf\Dompdf;
-use Dompdf\Options;
 
-if (isset($_COOKIE['resultado_consulta'])) {
-    $_SESSION['resultado_consulta'] = json_decode($_COOKIE['resultado_consulta'], true);
-}
-if (isset($_COOKIE['nome_buscado'])) {
-    $_SESSION['nome_buscado'] = $_COOKIE['nome_buscado'];
-}
 
 class Consulta
 {
+    public function __construct(){
+        if (isset($_COOKIE['resultado_consulta']) && $_COOKIE['resultado_consulta'] === 'true' && !isset($_SESSION['resultado_consulta'])) {
+            $_SESSION['resultado_consulta'] = true;
+            // Você pode querer recarregar os dados do usuário aqui
+        }
+    }
     public function salvarObservacoes($id, $observacoes)
     {
         try {
@@ -48,10 +66,17 @@ class Consulta
                 $_SESSION['resultado_consulta'] = $stmt->fetch(PDO::FETCH_ASSOC);
                 $_SESSION['nome_buscado'] = $nomePaciente;
 
-                setcookie('resultado_consulta', json_encode($_SESSION['resultado_consulta']), time() + 1800, "/"); // Válido por 30 dias
-                setcookie('nome_buscado', $nomePaciente, time() + 1800, "/");
-
-
+                setcookie('logado_2', 'true', [
+                    'expires' => time() + (30 * 60),
+                    'path' => '/',
+                    'domain' => 'lucianavenanciopsipp.com.br', // seu domínio aqui
+                    'secure' => true,
+                    'httponly' => true,
+                    'samesite' => 'Strict'
+                ]);
+            
+                header('Location: ' . strtok($_SERVER['PHP_SELF'], '?')); // Remove parâmetros da URL
+                exit();
             } catch (PDOException $e) {
                 $_SESSION['erro'] = "Erro na consulta: " . $e->getMessage();
             }
@@ -148,10 +173,7 @@ class Psicologa
 {
     public function __construct()
     {
-        if (isset($_COOKIE['usuario']) && $_COOKIE['usuario'] === 'true' && !isset($_SESSION['usuario'])) {
-            $_SESSION['usuario'] = true;
-            // Você pode querer recarregar os dados do usuário aqui
-        }
+        
         $this->verificarPsico();
     }
     function verificarIdentidade($email, $senha)
@@ -200,15 +222,7 @@ class Psicologa
                     'nome' => $usuario['nome_anam'],
                     'cpf' => $usuario['cd_cpf_anam_chefe']
                 ];
-                setcookie('logado', 'true', [
-                    'expires' => time() + (30 * 60),
-                    'path' => '/',
-                    'domain' => 'lucianavenanciopsipp.com.br', // seu domínio aqui
-                    'secure' => true,
-                    'httponly' => true,
-                    'samesite' => 'Strict'
-                ]);
-                setcookie('usuario_id', $usuario['cd_anam'], time() + (30 * 60), '/');
+               
                 // Redirecionamento seguro
                 header('Location: ' . strtok($_SERVER['PHP_SELF'], '?')); // Remove parâmetros da URL
                 exit();
@@ -264,104 +278,115 @@ class Psicologa
 
 
 
-class AuthSystem 
+class Autenticacao
 {
     // Constantes para tipos de usuário
     const PSICOLOGO = 'psi';
     const PACIENTE = 'user';
     private $psicologa;
 
-    
-    public function __construct() {
+    public function __construct()
+    {
         $this->psicologa = new Psicologa();
     }
 
     // Método principal para exibir os botões de autenticação
-    public function exibirBotoesAuth($tipoUsuario = null) {
+    public function exibirBotoesAuth($tipoUsuario = null)
+    {
+        echo '<div class="auth-buttons">';
         if ($tipoUsuario === self::PSICOLOGO) {
             // Para psicólogo: mostra login ou logout
-            echo '<div class="auth-buttons">';
             if (!isset($_SESSION['usuario'])) {
                 echo $this->botaoLogin();
             } else {
                 echo $this->botaoLogout($tipoUsuario);
             }
-            echo '</div>';
-        } 
-        elseif ($tipoUsuario === self::PACIENTE && isset($_SESSION['resultado_consulta'])) {
-            // Para paciente: só mostra logout se estiver logado
-            echo '<div class="auth-buttons">';
+        } elseif ($tipoUsuario === self::PACIENTE && !empty($_SESSION['resultado_consulta'])) {
             echo $this->botaoLogout($tipoUsuario);
-            echo '</div>';
         }
+        echo '</div>';
     }
 
     // Botão de logout com tratamento diferenciado
-    private function botaoLogout($tipoUsuario) {
+    private function botaoLogout($tipoUsuario)
+    {
+        $classes = 'btn btn-outline-';
+        $icone = '<i class="bi bi-box-arrow-right"></i> ';
+        $name = '';
+        $texto = '';
 
-        if($tipoUsuario === self::PACIENTE) {
-            return '<form method="post" class="d-inline">
-                      <button type="submit" name="logoutPaci" class="btn btn-outline-danger">
-                        <i class="bi bi-box-arrow-right"></i> Sair como Paciente
-                      </button>
-                    </form>';
+        if ($tipoUsuario === self::PACIENTE) {
+            $classes .= 'danger';
+            $name = 'logoutPaci';
+            $texto = 'Sair como Paciente';
+        } elseif ($tipoUsuario === self::PSICOLOGO) {
+            $classes .= 'primary';
+            $name = 'logoutPsi';
+            $texto = 'Sair como Psicólogo';
         }
-        elseif ($tipoUsuario === self::PSICOLOGO) {
-            return '<form method="post" class="d-inline">
-                      <button type="submit" name="logoutPsi" class="btn btn-outline-primary">
-                        <i class="bi bi-box-arrow-right"></i> Sair como Psicólogo
-                      </button>
-                    </form>';
-        } 
+
+        return sprintf(
+            '<form method="post" class="d-inline">
+                <button type="submit" name="%s" class="%s">
+                    %s%s
+                </button>
+            </form>',
+            htmlspecialchars($name),
+            htmlspecialchars($classes),
+            $icone,
+            htmlspecialchars($texto)
+        );
     }
 
-    private function botaoLogin() {
+    private function botaoLogin()
+    {
         return '<button class="btn btn-outline-success" onclick="abrirModal()">
                 <i class="bi bi-box-arrow-in-right"></i> Entrar
                 </button>';
     }
 
-    public function exibirEstruturaCompleta() {
+    public function exibirEstruturaCompleta()
+    {
         return $this->botaoLogin() . $this->psicologa->exibirModalLogin();
     }
 
     // Processa o logout quando solicitado
-    public function processarLogout() {
+    public function processarLogout()
+    {
         if ($_SERVER["REQUEST_METHOD"] === "POST") {
             // Logout Psicólogo
             if (isset($_POST['logoutPsi']) && isset($_SESSION['usuario'])) {
                 $this->realizarLogout(self::PSICOLOGO);
-                header("Location: ".$_SERVER['PHP_SELF']);
-                exit;
+                $this->redirecionar();
             }
             // Logout Paciente
-            elseif (isset($_POST['logoutPaci']) && isset($_SESSION['resultado_consulta'])) {
+            elseif (isset($_POST['logoutPaci']) && !empty($_SESSION['resultado_consulta'])) {
                 $this->realizarLogout(self::PACIENTE);
-                header("Location: ".$_SERVER['PHP_SELF']);
-                exit;
+                $this->redirecionar();
             }
         }
     }
 
     // Executa o logout de fato
-    private function realizarLogout($tipo) {
+    private function realizarLogout($tipo)
+    {
         if ($tipo === self::PSICOLOGO) {
             unset($_SESSION['usuario']);
+            session_regenerate_id(true); // Melhora a segurança
         } elseif ($tipo === self::PACIENTE) {
-            unset($_SESSION['resultado_consulta']);      
+            unset($_SESSION['resultado_consulta']);
+            unset($_COOKIE['resultado_consulta']);
+            unset($_COOKIE['nome_buscado']);
+            session_regenerate_id(true);
+
         }
- 
     }
 
-    // Método para verificar o tipo de usuário logado
-    public function getTipoUsuarioLogado()
+    // Redirecionamento seguro
+    private function redirecionar()
     {
-        if (isset($_SESSION['usuario'])) {
-            return self::PSICOLOGO;
-        } elseif (isset($_SESSION['resultado_consulta'])) {
-            return self::PACIENTE;
-        }
-        return null;
+        $url = filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
+        header("Location: " . $url);
+        exit;
     }
 }
-
