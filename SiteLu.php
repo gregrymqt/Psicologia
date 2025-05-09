@@ -6,7 +6,7 @@ require_once 'C:/xampp/htdocs/TiaLu/processa/processa_pdf.php';
 
 $psi = new Psicologa();
 $consul = new Consulta();
-$pdf = new ProcessaPdfs();
+$pdf = new ProcessaPdf();
 $autenticacao = new Autenticacao();
 $consulPdf = new ConsultaPfd();
 

@@ -27,8 +27,6 @@ require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
 require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
 require_once __DIR__ . '/../vendor/autoload.php'; // ou o caminho correto$vali = new Vali();
 require_once 'C:/xampp/htdocs/TiaLu/processa/processa_pdf.php';
-$ProcesaPdfs = new ProcessaPdfs();
-
 // Verifica se foi solicitado a visualização de PDF
 if (isset($_GET['action']) && $_GET['action'] === 'view_pdf' && isset($_GET['id'])) {
     $id = (int) $_GET['id'];
@@ -208,25 +206,28 @@ class ConsultaPfd
                 throw new Exception("Registro não encontrado");
             }
 
-            // 2. Construir caminho seguro
+            $pdfProcessor = new ProcessaPdf();
+            $basePath = $pdfProcessor->getBasePath();            
             $nomeArquivo = basename($document['conteudo_pdf']);
-
-            $arquivos = scandir(ProcessaPdfs::getBasePath());
+            $arquivos = scandir($basePath);
             $pdfEncontrado = null;
 
             foreach ($arquivos as $arquivo) {
                 if (pathinfo($arquivo, PATHINFO_EXTENSION) === 'pdf' && $arquivo === $nomeArquivo) {
-                    $pdfEncontrado = ProcessaPdfs::getBasePath() . $arquivo;
+                    $pdfEncontrado = $basePath . DIRECTORY_SEPARATOR . $arquivo;
                     break;
                 }
             }
 
+            // Se encontrado, exibir o PDF
             if ($pdfEncontrado && file_exists($pdfEncontrado)) {
                 header('Content-Type: application/pdf');
                 header('Content-Disposition: inline; filename="' . $nomeArquivo . '"');
                 header('Content-Length: ' . filesize($pdfEncontrado));
                 readfile($pdfEncontrado);
                 exit;
+            } else {
+                die('PDF não encontrado: ' . var_dump($nomeArquivo));
             }
         } catch (Exception $e) {
             // Página de erro simples
@@ -240,6 +241,7 @@ class ConsultaPfd
         </body>
         </html>';
         }
+
     }
 }
 
