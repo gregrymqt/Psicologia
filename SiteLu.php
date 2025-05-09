@@ -181,43 +181,47 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
             </form>
         </div>
         <!-- Formulário de Comparecimento (oculto por padrão) -->
-        <div id="comparecimento-content" class="document-content">
-            <form id="comparecimento-form" method="post" action="">
-                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label for="data_atendimento" class="form-label">Data da Consulta:</label>
-                        <input type="date" class="form-control" id="data_atendimento" name="data_atendimento" required>
-                        <div id="data-error" class="invalid-feedback"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <label for="horario_inicio" class="form-label">Horário de início:</label>
-                        <input type="time" class="form-control" id="horario_inicio" name="horario_inicio" required>
-                        <div id="hora-inicio-error" class="invalid-feedback"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <label for="horario_fim" class="form-label">Horário de término:</label>
-                        <input type="time" class="form-control" id="horario_fim" name="horario_fim" required>
-                        <div id="hora-fim-error" class="invalid-feedback"></div>
-                    </div>
-                    <div class="col-12">
-                        <label for="local_comparecimento" class="form-label">Local:</label>
-                        <input type="text" class="form-control" id="local_comparecimento" name="local" required>
-                        <div id="local-error" class="invalid-feedback"></div>
-                    </div>
-                    <div class="col-12 mt-2">
-                        <div class="btn-group">
-                            <button type="submit" class="btn btn-secondary " name="gerar_comparecimento">
-                                <i class="bi bi-file-earmark-pdf"></i> Gerar PDF
-                            </button>
-                            <button type="reset" class="btn btn-secondary">
-                                <i class="bi bi-eraser"></i> Limpar
-                            </button>
-                        </div>
-                    </div>
+       <div id="comparecimento-content" class="document-content">
+    <form id="comparecimento-form" method="post" action="">
+        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label for="data_atendimento" class="form-label">Data da Consulta:</label>
+                <input type="date" class="form-control" id="data_atendimento" name="data_atendimento" required
+                       >
+                <div id="data-error" class="invalid-feedback"></div>
+            </div>
+            <div class="col-md-6">
+                <label for="horario_inicio" class="form-label">Horário de início:</label>
+                <input type="time" class="form-control" id="horario_inicio" name="horario_inicio" required
+                      >
+                <div id="hora-inicio-error" class="invalid-feedback"></div>
+            </div>
+            <div class="col-md-6">
+                <label for="horario_fim" class="form-label">Horário de término:</label>
+                <input type="time" class="form-control" id="horario_fim" name="horario_fim" required
+                       >
+                <div id="hora-fim-error" class="invalid-feedback"></div>
+            </div>
+            <div class="col-12">
+                <label for="local_comparecimento" class="form-label">Local:</label>
+                <input type="text" class="form-control" id="local_comparecimento" name="local" required
+                       >
+                <div id="local-error" class="invalid-feedback"></div>
+            </div>
+            <div class="col-12 mt-2">
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-secondary" name="gerar_comparecimento">
+                        <i class="bi bi-file-earmark-pdf"></i> Gerar PDF
+                    </button>
+                    <button type="reset" class="btn btn-secondary" >
+                        <i class="bi bi-eraser"></i> Limpar
+                    </button>
                 </div>
-            </form>
+            </div>
         </div>
+    </form>
+</div>
         <div id="recibo-content" class="document-content">
             <form id="recibo-form" method="post" action="">
                 <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
@@ -381,14 +385,6 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
 
     <?php echo $psi->exibirModalLogin() ?>
     <!-- Bootstrap JS Bundle + Popper -->
-    <?php
-    date_default_timezone_set('America/Sao_Paulo');
-    $hojeSP = (new DateTime())->format('Y-m-d');
-    ?>
-    <script>
-        // Variável global acessível pelo seu .js
-        window.DATA_ATUAL_SP = '<?= $hojeSP ?>';
-    </script>
     <script src="script/script.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

@@ -113,8 +113,6 @@ class ConsultaPfd
     public function __construct()
     {
         $this->conn = Conexao::getConnection();
-
-
     }
     public function consultaPdfs()
     {

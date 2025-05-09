@@ -15,7 +15,7 @@ class ProcessaPdf
     private $logoPath;
     private $base64;
     private $options;
-    private  $basePath;
+    private $basePath;
 
 
     public function __construct()
@@ -23,14 +23,15 @@ class ProcessaPdf
         $this->configurarImg(); // Configura automaticamente ao instanciar
         $this->basePath = realpath('C:/xampp/htdocs/TiaLu/caminho/pdf');
         // Garante que o diretório base existe
-        if (!file_exists( $this->basePath)) {
-            if (!mkdir( $this->basePath, 0755, true)) {
+        if (!file_exists($this->basePath)) {
+            if (!mkdir($this->basePath, 0755, true)) {
                 throw new Exception("Não foi possível criar o diretório para PDFs");
             }
         }
 
     }
-    public function getbasePath(){
+    public function getbasePath()
+    {
         return $this->basePath;
     }
     public function configurarImg()
@@ -73,13 +74,14 @@ class ProcessaPdf
         // 5. SE CHEGOU ATÉ AQUI, USUÁRIO ESTÁ LOGADO
 // Agora podemos processar a página normalmente
     }
+
     public function gerarAtestado($identificacao)
     {
         // Validação do ID do paciente
         if (!is_numeric($identificacao)) {
             die("ID do paciente inválido");
         }
-         $camposObrigatorios = ['hora_inicio', 'hora_fim', 'motivo', 'retorno', 'data', 'local'];
+        $camposObrigatorios = ['hora_inicio', 'hora_fim', 'motivo', 'retorno', 'data', 'local'];
         foreach ($camposObrigatorios as $campo) {
             if (empty($_POST[$campo])) {
                 die("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
@@ -160,22 +162,37 @@ class ProcessaPdf
 
         // Gera o nome do arquivo
         $filename = "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $_SESSION['resultado_consulta']['NOME_COMPLETO']) . "_" . date('Y-m-d') . ".pdf";
-        $filepath = $this->getbasePath() . DIRECTORY_SEPARATOR . $filename;
+        $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
 
         // Cria o PDF
         $dompdf = new Dompdf($this->options);
 
-        try {
+         try {
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
 
-        // Armazena no banco de dados
+            // Verificação 1: Conteúdo PDF
+            $pdfContent = $dompdf->output();
+            if (empty($pdfContent)) {
+                throw new Exception("Falha ao gerar PDF: conteúdo vazio");
+            }
+
+            // Verificação 2: Caminho
+            if (!is_writable(dirname($filepath))) {
+                throw new Exception("Pasta não tem permissão de escrita: " . dirname($filepath));
+            }
+
+            // Salvamento
+            if (file_put_contents($filepath, $pdfContent) === false) {
+                throw new Exception("Falha ao salvar arquivo em: " . $filepath);
+            }
+
+            // Armazenamento no banco (verifique se $filepath é relativo ou absoluto)
             $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'atestado');
 
-
-            // 2. Gera HTML com o botão de download
-            echo $this->generatePdfViewerHtml($dompdf->output(), $filename);
+            // Exibição
+            echo $this->generatePdfViewerHtml($pdfContent, $filename);
             exit;
         } catch (Exception $e) {
             // Remove o arquivo se houve erro
@@ -306,26 +323,39 @@ class ProcessaPdf
         </body>
         </html>';
         $filename = "comparecimento_" . preg_replace('/[^a-z0-9]/i', '_', $_SESSION['resultado_consulta']['NOME_COMPLETO']) . "_" . date('Y-m-d') . ".pdf";
-        $filepath = $this->getbasePath() . DIRECTORY_SEPARATOR . $filename;
+        $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
 
         // Cria o PDF
         $dompdf = new Dompdf($this->options);
 
-     
-        try {
+
+         try {
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
 
+            // Verificação 1: Conteúdo PDF
+            $pdfContent = $dompdf->output();
+            if (empty($pdfContent)) {
+                throw new Exception("Falha ao gerar PDF: conteúdo vazio");
+            }
 
-            // Armazena no banco de dados
-            $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'comparecimento');
+            // Verificação 2: Caminho
+            if (!is_writable(dirname($filepath))) {
+                throw new Exception("Pasta não tem permissão de escrita: " . dirname($filepath));
+            }
 
-            // 2. Gera HTML com o botão de download
-            echo $this->generatePdfViewerHtml($dompdf->output(), $filename);
+            // Salvamento
+            if (file_put_contents($filepath, $pdfContent) === false) {
+                throw new Exception("Falha ao salvar arquivo em: " . $filepath);
+            }
+
+            // Armazenamento no banco (verifique se $filepath é relativo ou absoluto)
+            $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'atestado');
+
+            // Exibição
+            echo $this->generatePdfViewerHtml($pdfContent, $filename);
             exit;
-
-
         } catch (Exception $e) {
             // Remove o arquivo se houve erro
             if (file_exists($filepath)) {
@@ -342,12 +372,12 @@ class ProcessaPdf
 
     public function gerarRecibo($identificacao)
     {
-    
-     if (!is_numeric($identificacao)) {
+
+        if (!is_numeric($identificacao)) {
             die("ID do paciente inválido");
         }
 
-         $vali = new Vali();
+        $vali = new Vali();
 
         $cpf_paciente = $vali->formatarCPF($_SESSION['resultado_consulta']['CPF']);
         date_default_timezone_set('America/Sao_Paulo');
@@ -464,27 +494,39 @@ class ProcessaPdf
         </body>
         </html>';
         $filename = "recibo_" . preg_replace('/[^a-z0-9]/i', '_', $_SESSION['resultado_consulta']['NOME_COMPLETO']) . "_" . date('Y-m-d') . ".pdf";
-        $filepath = $this->getbasePath(). DIRECTORY_SEPARATOR . $filename;
+        $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
 
         // Cria o PDF
         $dompdf = new Dompdf($this->options);
 
-       
+
         try {
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
 
-            // Salva o PDF no servidor
+            // Verificação 1: Conteúdo PDF
+            $pdfContent = $dompdf->output();
+            if (empty($pdfContent)) {
+                throw new Exception("Falha ao gerar PDF: conteúdo vazio");
+            }
 
-            // Armazena no banco de dados
-            $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'recibo');
+            // Verificação 2: Caminho
+            if (!is_writable(dirname($filepath))) {
+                throw new Exception("Pasta não tem permissão de escrita: " . dirname($filepath));
+            }
 
+            // Salvamento
+            if (file_put_contents($filepath, $pdfContent) === false) {
+                throw new Exception("Falha ao salvar arquivo em: " . $filepath);
+            }
 
-            // 2. Gera HTML com o botão de download
-            echo $this->generatePdfViewerHtml($dompdf->output(), $filename);
+            // Armazenamento no banco (verifique se $filepath é relativo ou absoluto)
+            $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'atestado');
+
+            // Exibição
+            echo $this->generatePdfViewerHtml($pdfContent, $filename);
             exit;
-
         } catch (Exception $e) {
             // Remove o arquivo se houve erro
             if (file_exists($filepath)) {
@@ -498,14 +540,14 @@ class ProcessaPdf
             ];
         }
     }
-    
+
     private function salvarNoBanco($filepath, $idPaciente, $usuario, $tipo)
     {
         $conn = Conexao::getConnection();
         $conn->beginTransaction();
         $erros = [];
-        $cpf=$_SESSION['resultado_consulta']['CPF'];
-        $nome_paciente=$_SESSION['resultado_consulta']['NOME_COMPLETO'];
+        $cpf = $_SESSION['resultado_consulta']['CPF'];
+        $nome_paciente = $_SESSION['resultado_consulta']['NOME_COMPLETO'];
 
         try {
             $stmt = $conn->prepare("
@@ -538,7 +580,7 @@ class ProcessaPdf
             echo "<p>Erro: $erro</p>";
         }
     }
-    
+
     private function generatePdfViewerHtml($pdfContent, $filename)
     {
         $base64Pdf = base64_encode($pdfContent);
@@ -589,7 +631,7 @@ class ProcessaPdf
     </body>
     </html>
 HTML;
-    
+
     }
-    
+
 }
