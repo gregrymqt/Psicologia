@@ -160,7 +160,7 @@ class ProcessaPdf
 
         // Gera o nome do arquivo
         $filename = "atestado_" . preg_replace('/[^a-z0-9]/i', '_', $_SESSION['resultado_consulta']['NOME_COMPLETO']) . "_" . date('Y-m-d') . ".pdf";
-        $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
+        $filepath = $this->getbasePath() . DIRECTORY_SEPARATOR . $filename;
 
         // Cria o PDF
         $dompdf = new Dompdf($this->options);
@@ -170,10 +170,7 @@ class ProcessaPdf
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
 
-            // Salva o PDF no servidor
-            file_put_contents($filepath, $dompdf->output());
-
-            // Armazena no banco de dados
+        // Armazena no banco de dados
             $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'atestado');
 
 
@@ -309,7 +306,7 @@ class ProcessaPdf
         </body>
         </html>';
         $filename = "comparecimento_" . preg_replace('/[^a-z0-9]/i', '_', $_SESSION['resultado_consulta']['NOME_COMPLETO']) . "_" . date('Y-m-d') . ".pdf";
-        $filepath = $this->basePath . DIRECTORY_SEPARATOR . $filename;
+        $filepath = $this->getbasePath() . DIRECTORY_SEPARATOR . $filename;
 
         // Cria o PDF
         $dompdf = new Dompdf($this->options);
@@ -320,13 +317,9 @@ class ProcessaPdf
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
 
-            // Salva o PDF no servidor
-            file_put_contents($filepath, $dompdf->output());
 
             // Armazena no banco de dados
             $this->salvarNoBanco($filepath, $identificacao, $nomeUsuario, 'comparecimento');
-
-
 
             // 2. Gera HTML com o botão de download
             echo $this->generatePdfViewerHtml($dompdf->output(), $filename);

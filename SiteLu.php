@@ -9,9 +9,6 @@ $consul = new Consulta();
 $pdf = new ProcessaPdf();
 $autenticacao = new Autenticacao();
 $consulPdf = new ConsultaPfd();
-
-
-// Processar logout se necessário
 $autenticacao->processarLogout();
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -71,18 +68,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
     if (isset($_POST['abrir_pdf']) && isset($_POST['id_pdf'])) {
-    // Verifique o token CSRF
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-        die("Token CSRF inválido!");
+        // Verifique o token CSRF
+
+
+        $id = (int) $_POST['id_pdf'];
+        if ($id > 0) {
+
+            $consulPdf->showPdf($id);
+            exit;
+        }
     }
-    
-    $id = (int)$_POST['id_pdf'];
-    if ($id > 0) {
-        
-        $consulPdf->showPdf($id);
-        exit;
-    }
-}
 } else {
     header('SiteLu.php');
 }
@@ -305,8 +300,8 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
                                         <div class="card-body">
                                             <textarea name="observacoes" rows="5" style="min-height: 150px;"
                                                 class="form-control">
-                                                <?= htmlspecialchars($_SESSION['resultado_consulta']['observacao_paciente'] ?? '') ?>
-                                            </textarea>
+                                                        <?= htmlspecialchars($_SESSION['resultado_consulta']['observacao_paciente'] ?? '') ?>
+                                                    </textarea>
                                         </div>
                                         <div class="card-footer text-end">
                                             <button type="submit"
@@ -386,6 +381,14 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
 
     <?php echo $psi->exibirModalLogin() ?>
     <!-- Bootstrap JS Bundle + Popper -->
+    <?php
+    date_default_timezone_set('America/Sao_Paulo');
+    $hojeSP = (new DateTime())->format('Y-m-d');
+    ?>
+    <script>
+        // Variável global acessível pelo seu .js
+        window.DATA_ATUAL_SP = '<?= $hojeSP ?>';
+    </script>
     <script src="script/script.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

@@ -177,47 +177,66 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('comparecimento-form');
     
+    // Adiciona eventos onblur para validação quando o usuário sai do campo
+    document.getElementById('data_atendimento').addEventListener('blur', validarData);
+    document.getElementById('horario_inicio').addEventListener('blur', validarHorarios);
+    document.getElementById('horario_fim').addEventListener('blur', validarHorarios);
+    document.getElementById('local_comparecimento').addEventListener('blur', validarCamposObrigatorios);
+    
     form.addEventListener('submit', function(e) {
         e.preventDefault();
         
         if (validarFormulario()) {
+            // Se todas as validações passarem, envia o formulário
             this.submit();
         }
     });
-    
-    // Validação em tempo real
-    document.getElementById('data_atendimento').addEventListener('change', validarData);
-    document.getElementById('horario_inicio').addEventListener('change', validarHorarios);
-    document.getElementById('horario_fim').addEventListener('change', validarHorarios);
 });
 
 function validarFormulario() {
+    // Valida todos os campos e retorna true apenas se todos estiverem OK
     return validarData() && validarHorarios() && validarCamposObrigatorios();
 }
 
 function validarData() {
     const dataInput = document.getElementById('data_atendimento');
     const errorElement = document.getElementById('data-error');
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+
+      console.log("--- DEBUG VALIDAÇÃO ---");
+    console.log("Data PHP (window.DATA_ATUAL_SP):", window.DATA_ATUAL_SP || "Não definida");
+    console.log("Valor do input:", dataInput.value);
+    console.log("Tipo do input:", typeof dataInput.value);
+    console.log("Data atual local:", new Date().toISOString().split('T')[0]);
     
+
     if (!dataInput.value) {
         errorElement.textContent = 'Por favor, selecione uma data';
         dataInput.classList.add('is-invalid');
         return false;
     }
+
+    // Usa a data de hoje do PHP se estiver disponível
+    const hojeSP = window.DATA_ATUAL_SP || getDataAtualLocal();
+    const dataSelecionada = dataInput.value;
     
-    const dataSelecionada = new Date(dataInput.value);
-    
-    if (dataSelecionada < hoje) {
+    if (dataSelecionada < hojeSP) {
         errorElement.textContent = 'A data não pode ser no passado';
         dataInput.classList.add('is-invalid');
         return false;
     }
+    console.log("Data do PHP:", window.DATA_ATUAL_SP);
+console.log("Valor do input:", document.getElementById('data_atendimento').value);
     
     dataInput.classList.remove('is-invalid');
     errorElement.textContent = '';
     return true;
+}
+
+// Função auxiliar para quando não houver variável PHP
+function getDataAtualLocal() {
+    const hoje = new Date();
+    hoje.setMinutes(hoje.getMinutes() - hoje.getTimezoneOffset());
+    return hoje.toISOString().split('T')[0];
 }
 
 function validarHorarios() {
@@ -225,30 +244,33 @@ function validarHorarios() {
     const fimInput = document.getElementById('horario_fim');
     const errorInicio = document.getElementById('hora-inicio-error');
     const errorFim = document.getElementById('hora-fim-error');
+    let valido = true;
     
     if (!inicioInput.value) {
         errorInicio.textContent = 'Por favor, selecione um horário';
         inicioInput.classList.add('is-invalid');
-        return false;
+        valido = false;
+    } else {
+        inicioInput.classList.remove('is-invalid');
+        errorInicio.textContent = '';
     }
     
     if (!fimInput.value) {
         errorFim.textContent = 'Por favor, selecione um horário';
         fimInput.classList.add('is-invalid');
-        return false;
+        valido = false;
+    } else {
+        fimInput.classList.remove('is-invalid');
+        errorFim.textContent = '';
     }
     
-    if (fimInput.value <= inicioInput.value) {
+    if (inicioInput.value && fimInput.value && fimInput.value <= inicioInput.value) {
         errorFim.textContent = 'O horário de término deve ser após o início';
         fimInput.classList.add('is-invalid');
-        return false;
+        valido = false;
     }
     
-    inicioInput.classList.remove('is-invalid');
-    fimInput.classList.remove('is-invalid');
-    errorInicio.textContent = '';
-    errorFim.textContent = '';
-    return true;
+    return valido;
 }
 
 function validarCamposObrigatorios() {
@@ -265,5 +287,3 @@ function validarCamposObrigatorios() {
     errorElement.textContent = '';
     return true;
 }
-
-
