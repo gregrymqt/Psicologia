@@ -1,687 +1,101 @@
 <?php
-// 1. INICIAR SESSÃO (DEVE SER SEMPRE A PRIMEIRA LINHA)
-ob_start();
 session_start();
-// 2. INCLUIR DEPENDÊNCIAS
-require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/conexao.php';
-require_once '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/includes/funcoes.php';
-require_once __DIR__ . '/../vendor/autoload.php';
 
-use Dompdf\Dompdf;
-use Dompdf\Options;
+// Configurações
+$basePath = 'caminho/pdf/'; // Ajuste para seu caminho real
+$nomeArquivo = 'recibo_lucas_vicente_2025-05-02.pdf'; // Ou obtenha dinamicamente
 
-
-if(isset($_COOKIE['resultado_consulta'])) {
-    $dados = json_decode($_COOKIE['resultado_consulta'], true);
-    if (json_last_error() === JSON_ERROR_NONE) {
-        $_SESSION['resultado_consulta'] = $dados;
-    }
+// Gerar token CSRF
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-if(isset($_COOKIE['nome_buscado'])) {
-    $_SESSION['nome_buscado'] = htmlspecialchars($_COOKIE['nome_buscado'], ENT_QUOTES, 'UTF-8');
-}
+// Processar requisição POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['abrir_pdf'])) {
+    // Verificar CSRF
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die('Token CSRF inválido!');
+    }
 
-
-class Consulta
-{
-    public function salvarObservacoes($id, $observacoes)
-    {
-        try {
-            $conn = Conexao::getConnection();
-            $stmt = $conn->prepare("UPDATE anamnese SET observacao_paciente = ? WHERE ID = ?");
-            $stmt->execute([$observacoes, $id]);
-            return true;
-        } catch (PDOException $e) {
-            error_log("Erro ao salvar observações: " . $e->getMessage());
-            return false;
+    // Buscar o arquivo no diretório
+    $arquivos = scandir($basePath);
+    $pdfEncontrado = null;
+    
+    foreach ($arquivos as $arquivo) {
+        if (pathinfo($arquivo, PATHINFO_EXTENSION) === 'pdf' && $arquivo === $nomeArquivo) {
+            $pdfEncontrado = $basePath . $arquivo;
+            break;
         }
     }
-    public function consulpaciente()
-    {
-       if (!isset($_POST['nome_paciente']) || empty(trim($_POST['nome_paciente']))) {
-            throw new Exception("Por favor, informe o nome do paciente");
-        }
-            $nomePaciente = trim($_POST['nome_paciente']);
 
-            try {
-                $conn = Conexao::getConnection();
-                $stmt = $conn->prepare("SELECT * FROM anamnese 
-                          WHERE NOME_COMPLETO LIKE :nome 
-                          ORDER BY ID DESC 
-                          LIMIT 1");
-                $stmt->bindValue(':nome', '%' . $nomePaciente . '%');
-                $stmt->execute();
-
-                $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if (!$resultado) {
-                throw new Exception("Nenhum paciente encontrado com esse nome");
-            }
-
-            $_SESSION['resultado_consulta'] = $resultado;
-            $_SESSION['nome_buscado'] = $nomePaciente;
-
-            setcookie('resultado_consulta', json_encode($resultado), time() + 1800, "/", "", false, true);
-            setcookie('nome_buscado', $nomePaciente, time() + 1800, "/", "", false, true);
-
-            } catch (PDOException $e) {
-            error_log("Erro na consulta: " . $e->getMessage());
-            throw new Exception("Erro ao consultar o banco de dados");
-        }
+    // Se encontrado, exibir o PDF
+    if ($pdfEncontrado && file_exists($pdfEncontrado)) {
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: inline; filename="' . $nomeArquivo . '"');
+        header('Content-Length: ' . filesize($pdfEncontrado));
+        readfile($pdfEncontrado);
+        exit;
+    } else {
+        die('PDF não encontrado: ' . htmlspecialchars($nomeArquivo));
     }
 }
+?>
 
-class ConsultaPfd
-{
-    private  $conn;
-    public function __construct()
-    {
-        $this->conn = Conexao::getConnection();
-    }
-        public function consultaPdfs()
-        {
-            try {
-                $sql = "SELECT data_criacao, tipo_documento, cpf_paciente, nome_paciente FROM anamnese_pdfs WHERE 1=1";
-                $params = [];
-                // Se nenhum filtro foi selecionado
-            if (!isset($_POST['filtro']) || empty($_POST['filtro'])) {
-                $sql = "SELECT data_criacao, tipo_documento, cpf_paciente, nome_paciente 
-                        FROM anamnese_pdfs 
-                        ORDER BY data_criacao DESC 
-                        LIMIT 100";
-            } 
-            else {
-                    switch ($_POST['filtro']) {
-                        case 'data_criacao':
-                            if (!empty($_POST['dataInicio'])) {
-                                $sql .= " AND data_criacao = :dataInicio ";
-                                $params[':dataInicio'] = $_POST['dataInicio'];;
-                            }
-                            break;
-                        case 'tipo_documento':
-                            if (!empty($_POST['tipoDocumento'])) {
-                                $sql .= " AND tipo_documento = :tipoDocumento";
-                                $params[':tipoDocumento'] = $_POST['tipoDocumento'];
-                            }
-                            break;
-                        case 'cpf_paciente':
-                            if (!empty($_POST['cpfPaciente'])) {
-                                $sql .= " AND cpf_paciente = :cpfPaciente";
-                                $params[':cpfPaciente'] = $_POST['cpfPaciente'];
-                            }
-                            break;
-                    }
-                }
-                // Prepara e executa a query
-                $stmt = $this->conn->prepare($sql);
-                $stmt->execute($params);
-             return $stmt->fetchAll(PDO::FETCH_ASSOC);
-            } catch (PDOException $e) {
-                throw new Exception('Erro ao consultar o banco: ' . $e->getMessage());
-            }
-    }
-    public function exibirResultado($resultados)
-    {
-           if (!empty($resultados)) {
-    echo '<div class="results-container">';
-    echo '<h2 class="results-title"><i class="bi bi-table"></i> Resultados da Consulta</h2>';
-    echo '<div class="table-responsive">';
-    echo '<table class="results-table">';
-    echo '<thead><tr>
-            <th class="text-center"><i class="bi bi-calendar"></i> Data</th>
-            <th class="text-center"><i class="bi bi-file-earmark-text"></i> Tipo</th>
-            <th class="text-center"><i class="bi bi-person-badge"></i> CPF</th>
-            <th class="text-center"><i class="bi bi-person"></i> Paciente</th>
-          </tr></thead>';
-    echo '<tbody>';
-
-    foreach ($resultados as $row) {
-        echo '<tr class="result-row">';
-        echo '<td class="text-center">' . htmlspecialchars($row['data_criacao']) . '</td>';
-        echo '<td class="text-center"><span class="badge document-type">' . htmlspecialchars($row['tipo_documento']) . '</span></td>';
-        echo '<td class="text-center">' . htmlspecialchars($row['cpf_paciente']) . '</td>';
-        echo '<td>' . htmlspecialchars($row['nome_paciente']) . '</td>';
-        echo '</tr>';
-    }
-    echo '</tbody></table></div>';
-    echo '<div class="results-count">Total: ' . count($resultados) . ' registros encontrados</div>';
-    echo '</div>';
-}
-        
-    }
-}
-
-class ProcessaPdfs
-{
-    private $logoPath;
-    private $base64;
-    private $options;
-    private $basePath;
-    public function __construct()
-    {
-        $this->configurarImg(); // Configura automaticamente ao instanciar
-         $this->basePath = realpath('/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/caminho/pdf');
-        // Garante que o diretório base existe
-        if (!file_exists($this->basePath)) {
-            if (!mkdir($this->basePath, 0755, true)) {
-                throw new Exception("Não foi possível criar o diretório para PDFs");
-            }
-        }
-    }
-    public function configurarImg()
-    {
-        $this->logoPath = '/home/u104715539/domains/lucianavenanciopsipp.com.br//public_html/img/marcaDaguaLu.jpeg';
-        // 3. Verificações robustas
-        if (!file_exists($this->logoPath)) {
-            die("ERRO: Imagem não encontrada em: " . realpath($this->logoPath));
-        }
-        if (!is_readable($this->logoPath)) {
-            die("ERRO: Sem permissão para ler a imagem. Permissões: " . substr(decoct(fileperms($this->logoPath)), -4));
-        }
-        // 4. Codificação base64 com verificação adicional
-        try {
-            $imageData = file_get_contents($this->logoPath);
-            if ($imageData === false) {
-                throw new Exception("Falha ao ler o arquivo de imagem");
-            }
-            $mime = mime_content_type($this->logoPath);
-            $this->base64 = 'data:' . $mime . ';base64,' . base64_encode($imageData);
-        } catch (Exception $e) {
-            die("ERRO no processamento da imagem: " . $e->getMessage());
-        }
-        // 5. Configuração do DomPDF com opções otimizadas
-        $this->options = new Options();
-        $this->options->set('isRemoteEnabled', true);
-        $this->options->set('isPhpEnabled', true);
-        $this->options->set('isHtml5ParserEnabled', true);
-        $this->options->set('defaultFont', 'Arial');
-        
-    }
-    public function gerarAtestado($identificacao)
-    {
-        $this->validarIdPaciente($identificacao);
-        $camposObrigatorios = ['hora_inicio', 'hora_fim', 'motivo', 'retorno', 'data', 'local'];
-        $this->validarCamposObrigatorios($camposObrigatorios);
-
-        $dados = $this->processarDadosFormulario();
-        $html = $this->gerarHtmlAtestado($dados);
-
-        return $this->gerarPdf($html, $identificacao, 'atestado');
-    }
-
-    public function gerarComparecimento($identificacao)
-    {
-        $this->validarIdPaciente($identificacao);
-        $camposObrigatorios = ['horario_inicio', 'horario_fim', 'local', 'data_atendimento'];
-        $this->validarCamposObrigatorios($camposObrigatorios);
-
-        $dados = $this->processarDadosFormulario();
-        $html = $this->gerarHtmlComparecimento($dados);
-
-        return $this->gerarPdf($html, $identificacao, 'comparecimento');
-    }
-
-    public function gerarRecibo($identificacao)
-    {
-        $this->validarIdPaciente($identificacao);
-        
-        $vali = new Vali();
-        $cpf_paciente = $vali->formatarCPF($_SESSION['resultado_consulta']['CPF']);
-        $dados = $this->processarDadosRecibo($cpf_paciente);
-        $html = $this->gerarHtmlRecibo($dados);
-
-        return $this->gerarPdf($html, $identificacao, 'recibo');
-    }
-
-    private function gerarPdf($html, $idPaciente, $tipoDocumento)
-    {
-        $nomeArquivo = $this->gerarNomeArquivo($tipoDocumento);
-        $caminhoArquivo = $this->basePath . DIRECTORY_SEPARATOR . $nomeArquivo;
-
-        try {
-            $dompdf = new Dompdf($this->options);
-            $dompdf->loadHtml($html);
-            $dompdf->setPaper('A4', 'portrait');
-            $dompdf->render();
-
-            file_put_contents($caminhoArquivo, $dompdf->output());
-            $this->salvarNoBanco($caminhoArquivo, $idPaciente, $_SESSION['usuario']['nome'] ?? 'Visitante', $tipoDocumento);
-
-            return $this->generatePdfViewerHtml($dompdf->output(), $nomeArquivo);
-        } catch (Exception $e) {
-            if (file_exists($caminhoArquivo)) {
-                unlink($caminhoArquivo);
-            }
-            error_log("Erro ao gerar PDF: " . $e->getMessage());
-            throw new Exception("Erro ao gerar documento");
-        }
-    }
-    private function validarCamposObrigatorios($campos)
-    {
-        foreach ($campos as $campo) {
-            if (empty($_POST[$campo])) {
-                throw new Exception("Por favor, preencha o campo " . ucfirst(str_replace('_', ' ', $campo)));
-            }
-        }
-    }
-    private function processarDadosFormulario()
-    {
-        return [
-            'hora_inicio' => htmlspecialchars($_POST["hora_inicio"] ?? ''),
-            'hora_fim' => htmlspecialchars($_POST["hora_fim"] ?? ''),
-            'motivo' => htmlspecialchars($_POST["motivo"] ?? ''),
-            'retorno' => htmlspecialchars($_POST["retorno"] ?? ''),
-            'data' => htmlspecialchars($_POST["data"] ?? ''),
-            'local' => htmlspecialchars($_POST["local"] ?? ''),
-            'nome_paciente' => $_SESSION['resultado_consulta']['NOME_COMPLETO'],
-            'nome_usuario' => htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8'),
-            'crp_usuario' => htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8'),
-            'email_usuario' => htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8'),
-            'data_nascimento' => $_SESSION['resultado_consulta']['DATA_NASCIMENTO'] ?? null
-        ];
-    }
-    private function processarDadosRecibo($cpf_paciente)
-    {
-        date_default_timezone_set('America/Sao_Paulo');
-        $dataAtual = new DateTime();
-        
-        return [
-            'valor_consulta' => 250.00,
-            'valor_extenso' => "duzentos e cinquenta reais",
-            'valor_formatado' => "R$ " . number_format(250.00, 2, ',', '.'),
-            'data_formatada' => $dataAtual->format('d/m/Y'),
-            'nome_paciente' => $_SESSION['resultado_consulta']['NOME_COMPLETO'],
-            'cpf_paciente' => $cpf_paciente,
-            'nome_usuario' => htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8'),
-            'crp_usuario' => htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8'),
-            'email_usuario' => htmlspecialchars($_SESSION['usuario']['email'] ?? 'E-mail não cadastrado', ENT_QUOTES, 'UTF-8'),
-            'cpf_usuario' => htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastrado', ENT_QUOTES, 'UTF-8')
-        ];
-    }
-    private function gerarHtmlAtestado($dados)
-    {
-        $retornoFormatado = date("d/m/Y", strtotime($dados['retorno']));
-        $dataFormatada = date("d/m/Y", strtotime($dados['data']));
-
-        return <<<HTML
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizar PDF</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: DejaVu Sans, sans-serif; line-height: 1.6; padding: 20px; }
-        .header { text-align: center; margin-bottom: 30px; }
-        .underline { text-decoration: underline; }
-        p { margin-bottom: 15px; }
-        .logo { height: 200px; width: auto; max-width: 200px; }
-        .footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; opacity: 0.2; }
-    </style>
-</head>
-<body>
-    <div class="header"><h2>ATESTADO PSICOLÓGICO</h2></div>
-    
-    <p>{$dados['nome_usuario']}<br>Psicóloga – CRP {$dados['crp_usuario']}<br>E-mail: {$dados['email_usuario']}</p>
-    
-    <p>Atesto, para os devidos fins, que o(a) Sr.(a) <span class="underline">{$dados['nome_paciente']}</span>, 
-    esteve em atendimento psicológico nesta data, das {$dados['hora_inicio']} 
-    às {$dados['hora_fim']}.</p>
-    
-    <p>Motivo do atendimento (respeitando o sigilo profissional):</p>
-    <p>{$dados['motivo']}</p>
-    
-    <p>Recomendo que, o(a) paciente poderá retornar às suas atividades habituais em {$retornoFormatado}.<br>
-    E sugiro que o mesmo seja reavaliado por mim e demais profissionais de saúde que possam estar acompanhando este caso.</p>
-    
-    <p>Local: {$dados['local']}<br>Data: {$dataFormatada}</p><br><br>
-    <img class="logo" src="{$this->base64}" alt="Logo">
-</body>
-</html>
-HTML;
-    }
-
-    private function gerarHtmlComparecimento($dados)
-    {
-        $dataNascFormatada = date("d/m/Y", strtotime($dados['data_nascimento']));
-        $dataAtendFormatada = date("d/m/Y", strtotime($dados['data']));
-
-        return <<<HTML
-<!DOCTYPE html>
-<html>
-<head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <style>
-        body { font-family: DejaVu Sans, sans-serif; line-height: 1.6; padding: 50px; font-size: 14px; }
-        .header { text-align: center; margin-bottom: 40px; font-weight: bold; font-size: 16px; }
-        .underline { text-decoration: underline; display: inline-block; min-width: 200px; }
-        .logo-container { text-align: center; margin: 20px 0; width: 100%; }
-        .logo { height: 200px; width: auto; max-width: 200px; display: block; margin: 0 auto; }
-        .footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; opacity: 0.2; }
-        .signature-line { width: 300px; border-top: 1px solid black; margin: 40px auto 0; padding-top: 5px; text-align: center; }
-    </style>
-</head>
-<body>
-    <div class="header">DECLARAÇÃO DE COMPARECIMENTO</div>
-
-    <p>Declaro, para os devidos fins, que o(a) Sr.(a) <span class="underline">{$dados['nome_paciente']}</span>,<br>
-    nascido(a) em {$dataNascFormatada}, compareceu ao atendimento psicológico nesta data,<br>
-    no horário das {$dados['hora_inicio']} às {$dados['hora_fim']}.</p>
-    
-    <p>Esta declaração é emitida para comprovação de presença em consulta.</p>
-    
-    <p>Local: {$dados['local']}<br>Data: {$dataAtendFormatada}</p>
-    
-    <div class="signature-line"></div>
-    
-    <div class="footer">
-        {$dados['nome_usuario']}<br>CRP {$dados['crp_usuario']}
-    </div><br><br>
-    <div class="logo-container"><img class="logo" src="{$this->base64}" alt="Logo"></div>
-</body>
-</html>
-HTML;
-    }
-
-    private function gerarHtmlRecibo($dados)
-    {
-        return <<<HTML
-<!DOCTYPE html>
-<html>
-<head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-        .recibo-container { max-width: 800px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; }
-        .recibo { margin-bottom: 30px; }
-        .header { text-align: center; margin-bottom: 20px; }
-        .dados-psicologo, .dados-paciente { margin-bottom: 15px; line-height: 1.6; }
-        .separador { text-align: center; margin: 20px 0; font-size: 24px; color: #555; }
-        .data-assinatura { margin-top: 50px; text-align: right; }
-        .assinatura { margin-top: 80px; border-top: 1px solid #000; padding-top: 5px; width: 300px; float: right; }
-        .logo { height: 95px; width: auto; max-width: 200px; }
-        .footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; opacity: 0.2; }
-        .valor-extenso { font-style: italic; color: #444; }
-    </style>
-</head>
-<body>
-    <div class="recibo-container">
-        <div class="recibo">
-            <div class="header"><h1>RECIBO DE PAGAMENTO – PSICÓLOGA</h1></div>
-            
-            <div class="dados-psicologo">
-                <p><strong>Nome da Psicóloga:</strong> {$dados['nome_usuario']}</p>
-                <p><strong>CPF:</strong> {$dados['cpf_usuario']}</p>
-                <p><strong>CRP:</strong> {$dados['crp_usuario']}</p>
-                <p><strong>E-mail:</strong> {$dados['email_usuario']}</p>
-            </div>
-            
-            <div class="separador">–––––––</div>
-            
-            <div class="header"><h2>RECIBO DE PAGAMENTO</h2></div>
-            
-            <div class="corpo-recibo">
-                <p>Recebi de <strong>{$dados['nome_paciente']}</strong></p>
-                <div class="dados-paciente"><p>CPF: {$dados['cpf_paciente']}</p></div>
-                <p>o valor de <strong>{$dados['valor_formatado']}</strong> (<span class="valor-extenso">{$dados['valor_extenso']}</span>) referente a uma sessão de psicoterapia individual, realizada na data {$dados['data_formatada']}</p>
-            </div>
-            
-            <div class="data-assinatura">
-                <p>{$dados['data_formatada']}</p>
-                <div class="assinatura">
-                    <p>{$dados['nome_usuario']}</p>
-                    <p>CRP {$dados['crp_usuario']}</p>
-                </div>
-            </div>
-
-            <div class="footer">
-                <p>Este recibo é emitido para fins de comprovação de pagamento por serviços prestados na área da Psicologia, conforme legislação vigente.</p>
-                <p>Recibo gerado em {$dados['data_formatada']}</p>
-            </div>
-        </div>
-    </div>
-    <img class="logo" src="{$this->base64}" alt="Logo">
-</body>
-</html>
-HTML;
-    }
-    
-    private function gerarNomeArquivo($tipoDocumento)
-    {
-        $nomePaciente = preg_replace('/[^a-z0-9]/i', '_', $_SESSION['resultado_consulta']['NOME_COMPLETO']);
-        return "{$tipoDocumento}_{$nomePaciente}_" . date('Y-m-d') . ".pdf";
-    }
-
-    private function salvarNoBanco($filepath, $idPaciente, $usuario, $tipo)
-    {
-        $conn = Conexao::getConnection();
-        
-        try {
-            $conn->beginTransaction();
-            
-            $stmt = $conn->prepare("
-                INSERT INTO anamnese_pdfs 
-                (conteudo_pdf, id_paciente, tipo_documento, usuario_criacao, cpf_paciente, nome_paciente) 
-                VALUES (:caminho, :id_paciente, :tipo, :usuario, :cpf, :nome_paciente)
-            ");
-
-            $stmt->execute([
-                ':caminho' => $filepath,
-                ':id_paciente' => $idPaciente,
-                ':tipo' => $tipo,
-                ':usuario' => $usuario,
-                ':cpf' => $_SESSION['resultado_consulta']['CPF'],
-                ':nome_paciente' => $_SESSION['resultado_consulta']['NOME_COMPLETO']
-            ]);
-
-            $conn->commit();
-        } catch (Exception $e) {
-            $conn->rollBack();
-            throw new Exception("Erro ao salvar no banco de dados: " . $e->getMessage());
-        }
-    }
-
-    private function generatePdfViewerHtml($pdfContent, $filename)
-    {
-        $base64Pdf = base64_encode($pdfContent);
-
-        return <<<HTML
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Visualizar Documento</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-        .pdf-container { display: flex; flex-direction: column; height: 100vh; }
-        .pdf-toolbar { 
-            background: #f5f5f5; 
-            padding: 10px; 
-            display: flex; 
-            justify-content: flex-end;
-            border-bottom: 1px solid #ddd;
-        }
-        .download-btn {
-            background: #4CAF50;
+        .btn-pdf {
+            background-color: #e74c3c;
             color: white;
             border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
+            padding: 10px 20px;
+            border-radius: 5px;
             cursor: pointer;
-            text-decoration: none;
+            font-size: 16px;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
-        .pdf-viewer {
-            flex-grow: 1;
-            border: none;
-            width: 100%;
+        .btn-pdf:hover {
+            background-color: #c0392b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .pdf-container {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
         }
     </style>
 </head>
 <body>
-    <div class="pdf-container">
-        <div class="pdf-toolbar">
-            <a href="data:application/pdf;base64,{$base64Pdf}" 
-               download="{$filename}" 
-               class="download-btn">
-               Baixar Documento
-            </a>
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+        <button type="submit" name="abrir_pdf" class="btn-pdf" title="Visualizar PDF">
+            <i class="fas fa-file-pdf"></i> Abrir PDF
+        </button>
+    </form>
+
+    <?php if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['abrir_pdf'])): ?>
+        <div class="pdf-container">
+            <?php
+            // Listar todos os PDFs disponíveis (para debug)
+            echo "<h3>Arquivos PDF no diretório:</h3>";
+            $arquivos = scandir($basePath);
+            foreach ($arquivos as $arquivo) {
+                if (pathinfo($arquivo, PATHINFO_EXTENSION) === 'pdf') {
+                    echo htmlspecialchars($arquivo) . "<br>";
+                }
+            }
+            ?>
         </div>
-        <iframe class="pdf-viewer" 
-                src="data:application/pdf;base64,{$base64Pdf}"></iframe>
-    </div>
+    <?php endif; ?>
 </body>
 </html>
-HTML;
-    }
-}
-
-class Psicologa
-{
-    public function __construct()
-    {
-        if (isset($_COOKIE['usuario']) && $_COOKIE['usuario'] === 'true' && !isset($_SESSION['usuario'])) {
-            $_SESSION['usuario'] = true;
-            // Você pode querer recarregar os dados do usuário aqui
-        }
-        $this->verificarPsico();
-        $this->processarLogout();
-    }
-    function verificarIdentidade($email, $senha)
-    {
-        try {
-            $conn = Conexao::getConnection();
-
-            // Consulta mais segura, selecionando apenas campos necessários
-            $stmt = $conn->prepare("SELECT cd_anam, email_anam, cd_crp_anam_chefe, nome_anam, senha_anam, cd_cpf_anam_chefe 
-                               FROM anamnese_chefe 
-                               WHERE email_anam = :email 
-                               LIMIT 1");
-            $stmt->bindParam(':email', $email);
-            $stmt->execute();
-            if ($stmt->rowCount() === 0) {
-                return false;
-            }
-            $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
-            // Verificação segura da senha
-            if (password_verify($senha, $usuario['senha_anam'])) {
-                // Remove a senha antes de retornar
-                unset($usuario['senha_anam']);
-                return $usuario;
-            }
-            return false;
-        } catch (PDOException $e) {
-            error_log("Erro ao verificar identidade: " . $e->getMessage());
-            return false;
-        }
-    }
-    public function verificarPsico()
-    {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['botLogin']))) {
-            $email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
-            $senha = $_POST['senha'] ?? '';
-            if (empty($email) || empty($senha)) {
-                $_SESSION['erro_login'] = "Preencha todos os campos!";
-                header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
-                exit;
-            }
-            if ($usuario = $this->verificarIdentidade($email, $senha)) {
-                $_SESSION['usuario'] = [
-                    'id' => $usuario['cd_anam'],  // Importante para identificar o usuário
-                    'email' => $usuario['email_anam'],
-                    'crp' => $usuario['cd_crp_anam_chefe'],
-                    'nome' => $usuario['nome_anam'],
-                    'cpf' => $usuario['cd_cpf_anam_chefe']
-                ];
-                setcookie('logado', 'true', [
-                    'expires' => time() + (30 * 60),
-                    'path' => '/',
-                    'domain' => 'lucianavenanciopsipp.com.br', // seu domínio aqui
-                    'secure' => true,
-                    'httponly' => true,
-                    'samesite' => 'Strict'
-                ]);
-                setcookie('usuario_id', $usuario['cd_anam'], time() + (30 * 60), '/');
-                // Redirecionamento seguro
-                header('Location: ' . strtok($_SERVER['PHP_SELF'], '?')); // Remove parâmetros da URL
-                exit();
-            } else {
-                $_SESSION['erro_login'] = "E-mail ou senha incorretos!";
-                header('Location: ' . filter_var($_SERVER['PHP_SELF'], FILTER_SANITIZE_URL));
-                exit;
-            }
-        }
-    }
-    private function processarLogout()
-    {
-        if (isset($_GET['logout'])) {
-            // Limpa os cookies
-            setcookie('logado', '', time() - 3600, '/');
-            setcookie('usuario_id', '', time() - 3600, '/');
-            // Destrói a sessão
-            session_unset();
-            session_destroy();
-            header("Location: " . $_SERVER['PHP_SELF']);
-            exit();
-        }
-    }
-    public function exibirBotoesAuth()
-    {
-        return '<div class="auth-buttons" style="position: static; margin-left: auto;">' .
-            (isset($_SESSION['usuario']) ? $this->botaoLogout() : $this->botaoLogin()) .
-            '</div>';
-    }
-    private function botaoLogin()
-    {
-        return '<button class="btn btn-outline-primary" onclick="abrirModal()">
-    <i class="bi bi-box-arrow-in-right"></i> Login</button>';
-    }
-    private function botaoLogout()
-    {
-        return '<button class="btn btn-outline-primary" onclick="window.location.href=\'?logout=1\'">
-            <i class="bi bi-box-arrow-right"></i> Sair
-            </button>';
-    }
-    public function exibirModalLogin()
-    {
-        return '
-        <div id="loginModal" class="modal">
-            <div class="modal-content">
-                <span class="close" onclick="fecharModal()">&times;</span>
-                <h2>Login</h2>
-                ' . (isset($_SESSION['erro_login']) ? '<p class="erro">' . $_SESSION['erro_login'] . '</p>' : '') . '
-                <form method="POST" action="">
-                    <div class="mb-3">
-                        <label for="email" class="form-label">Email:</label>
-                        <input type="email" class="form-control" id="email" name="email" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="senha" class="form-label">Senha:</label>
-                        <input type="password" class="form-control" id="senha" name="senha" required>
-                    </div>
-                    <div class="modal-buttons">
-                        <button type="submit" name="botLogin" class="btn btn-primary">
-                            <i class="bi bi-box-arrow-in-right"></i> Entrar
-                        </button>
-                        <button type="button" class="btn btn-secondary" onclick="fecharModal()">
-                            <i class="bi bi-x-circle"></i> Cancelar
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-        <div id="modalOverlay" class="overlay"></div>
-        <script>
-            function abrirModal() {
-                document.getElementById("loginModal").style.display = "block";
-                document.getElementById("modalOverlay").style.display = "block";
-            }
-            function fecharModal() {
-                document.getElementById("loginModal").style.display = "none";
-                document.getElementById("modalOverlay").style.display = "none";
-            }
-            document.getElementById("modalOverlay").addEventListener("click", fecharModal);
-        </script>';
-    }
-}
-
-
-
-

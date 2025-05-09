@@ -26,12 +26,29 @@ $_SESSION['LAST_ACTIVITY'] = time();
 require_once 'C:/xampp/htdocs/TiaLu/includes/conexao.php';
 require_once 'C:/xampp/htdocs/TiaLu/includes/funcoes.php';
 require_once __DIR__ . '/../vendor/autoload.php'; // ou o caminho correto$vali = new Vali();
+require_once 'C:/xampp/htdocs/TiaLu/processa/processa_pdf.php';
+$ProcesaPdfs = new ProcessaPdfs();
 
+// Verifica se foi solicitado a visualização de PDF
+if (isset($_GET['action']) && $_GET['action'] === 'view_pdf' && isset($_GET['id'])) {
+    $id = (int) $_GET['id'];
+
+    // Verifica se o ID é válido
+    if ($id <= 0) {
+        die("ID do PDF inválido");
+    }
+
+    $ProcessaSite = new ConsultaPfd();
+    // Chama o método para exibir o PDF
+    echo $ProcessaSite->showPdf($id);
+    exit; // Importante para não renderizar o resto da página
+}
 
 
 class Consulta
 {
-    public function __construct(){
+    public function __construct()
+    {
         if (isset($_COOKIE['resultado_consulta']) && $_COOKIE['resultado_consulta'] === 'true' && !isset($_SESSION['resultado_consulta'])) {
             $_SESSION['resultado_consulta'] = true;
             // Você pode querer recarregar os dados do usuário aqui
@@ -74,7 +91,7 @@ class Consulta
                     'httponly' => true,
                     'samesite' => 'Strict'
                 ]);
-            
+
                 header('Location: ' . strtok($_SERVER['PHP_SELF'], '?')); // Remove parâmetros da URL
                 exit();
             } catch (PDOException $e) {
@@ -98,15 +115,17 @@ class ConsultaPfd
     public function __construct()
     {
         $this->conn = Conexao::getConnection();
+
+
     }
     public function consultaPdfs()
     {
         try {
-            $sql = "SELECT data_criacao, tipo_documento, cpf_paciente, nome_paciente FROM anamnese_pdfs WHERE 1=1";
+            $sql = "SELECT data_criacao, tipo_documento, cpf_paciente, nome_paciente, id_pdf  FROM anamnese_pdfs WHERE 1=1";
             $params = [];
             // Se nenhum filtro foi selecionado
             if (!isset($_POST['filtro']) || empty($_POST['filtro'])) {
-                $sql = "SELECT data_criacao, tipo_documento, cpf_paciente, nome_paciente 
+                $sql = "SELECT data_criacao, tipo_documento, cpf_paciente, nome_paciente, id_pdf 
                         FROM anamnese_pdfs 
                         ORDER BY data_criacao DESC 
                         LIMIT 100";
@@ -142,28 +161,85 @@ class ConsultaPfd
     }
     public function exibirResultado($resultados)
     {
-
         if (!empty($resultados)) {
             echo '<h2>Resultados da Consulta</h2>';
             echo '<div class="table-responsive">';
             echo '<table class="table table-striped">';
-            echo '<thead><tr><th>Data</th><th>Tipo</th><th>CPF</th><th>Nome paciente</th></tr></thead>';
+            echo '<thead><tr><th>ID</th><th>Data</th><th>Tipo</th><th>CPF</th><th>Paciente</th></tr></thead>';
             echo '<tbody>';
-
             foreach ($resultados as $row) {
                 echo '<tr>';
                 echo '<td>' . htmlspecialchars($row['data_criacao']) . '</td>';
                 echo '<td>' . htmlspecialchars($row['tipo_documento']) . '</td>';
                 echo '<td>' . htmlspecialchars($row['cpf_paciente']) . '</td>';
                 echo '<td>' . htmlspecialchars($row['nome_paciente']) . '</td>';
+                echo '<td>';
+                if (!empty($row['id_pdf'])) {
+                    echo '<form method="post" action="" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="' . $_SESSION['csrf_token'] . '">
+            <input type="hidden" name="id_pdf" value="' . htmlspecialchars($row['id_pdf']) . '">
+            <button type="submit" name="abrir_pdf" class="btn-pdf" title="Visualizar PDF">
+                <i class="fas fa-file-pdf"></i> Abrir PDF
+            </button>
+          </form>';
+                } else {
+                    echo '<span class="pdf-missing">
+            <i class="far fa-file-pdf"></i> Não disponível
+          </span>';
+                }
+                echo '</td>';
                 echo '</tr>';
             }
-
             echo '</tbody></table></div>';
         } else {
             echo '<div class="alert alert-info">Nenhum documento encontrado.</div>';
         }
+    }
 
+    public function showPdf($id)
+    {
+        try {
+            // 1. Busca no banco
+            $stmt = $this->conn->prepare("SELECT conteudo_pdf FROM anamnese_pdfs WHERE id_pdf = ?");
+            $stmt->execute([$id]);
+            $document = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$document || empty($document['conteudo_pdf'])) {
+                throw new Exception("Registro não encontrado");
+            }
+
+            // 2. Construir caminho seguro
+            $nomeArquivo = basename($document['conteudo_pdf']);
+
+            $arquivos = scandir(ProcessaPdfs::getBasePath());
+            $pdfEncontrado = null;
+
+            foreach ($arquivos as $arquivo) {
+                if (pathinfo($arquivo, PATHINFO_EXTENSION) === 'pdf' && $arquivo === $nomeArquivo) {
+                    $pdfEncontrado = ProcessaPdfs::getBasePath() . $arquivo;
+                    break;
+                }
+            }
+
+            if ($pdfEncontrado && file_exists($pdfEncontrado)) {
+                header('Content-Type: application/pdf');
+                header('Content-Disposition: inline; filename="' . $nomeArquivo . '"');
+                header('Content-Length: ' . filesize($pdfEncontrado));
+                readfile($pdfEncontrado);
+                exit;
+            }
+        } catch (Exception $e) {
+            // Página de erro simples
+            echo '<!DOCTYPE html>
+        <html>
+        <head><title>Erro</title></head>
+        <body>
+            <h2>Erro ao visualizar PDF</h2>
+            <p>' . htmlspecialchars($e->getMessage()) . '</p>
+            <p>Arquivo: ' . htmlspecialchars($nomeArquivo ?? '') . '</p>
+        </body>
+        </html>';
+        }
     }
 }
 
@@ -173,7 +249,7 @@ class Psicologa
 {
     public function __construct()
     {
-        
+
         $this->verificarPsico();
     }
     function verificarIdentidade($email, $senha)
@@ -222,7 +298,7 @@ class Psicologa
                     'nome' => $usuario['nome_anam'],
                     'cpf' => $usuario['cd_cpf_anam_chefe']
                 ];
-               
+
                 // Redirecionamento seguro
                 header('Location: ' . strtok($_SERVER['PHP_SELF'], '?')); // Remove parâmetros da URL
                 exit();
@@ -316,7 +392,7 @@ class Autenticacao
         $texto = '';
 
         if ($tipoUsuario === self::PACIENTE) {
-            $classes .= 'danger';
+            $classes .= 'secondary';
             $name = 'logoutPaci';
             $texto = 'Sair como Paciente';
         } elseif ($tipoUsuario === self::PSICOLOGO) {
@@ -390,3 +466,5 @@ class Autenticacao
         exit;
     }
 }
+
+

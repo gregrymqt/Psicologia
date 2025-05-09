@@ -171,6 +171,99 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-
 });
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('comparecimento-form');
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        if (validarFormulario()) {
+            this.submit();
+        }
+    });
+    
+    // Validação em tempo real
+    document.getElementById('data_atendimento').addEventListener('change', validarData);
+    document.getElementById('horario_inicio').addEventListener('change', validarHorarios);
+    document.getElementById('horario_fim').addEventListener('change', validarHorarios);
+});
+
+function validarFormulario() {
+    return validarData() && validarHorarios() && validarCamposObrigatorios();
+}
+
+function validarData() {
+    const dataInput = document.getElementById('data_atendimento');
+    const errorElement = document.getElementById('data-error');
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    
+    if (!dataInput.value) {
+        errorElement.textContent = 'Por favor, selecione uma data';
+        dataInput.classList.add('is-invalid');
+        return false;
+    }
+    
+    const dataSelecionada = new Date(dataInput.value);
+    
+    if (dataSelecionada < hoje) {
+        errorElement.textContent = 'A data não pode ser no passado';
+        dataInput.classList.add('is-invalid');
+        return false;
+    }
+    
+    dataInput.classList.remove('is-invalid');
+    errorElement.textContent = '';
+    return true;
+}
+
+function validarHorarios() {
+    const inicioInput = document.getElementById('horario_inicio');
+    const fimInput = document.getElementById('horario_fim');
+    const errorInicio = document.getElementById('hora-inicio-error');
+    const errorFim = document.getElementById('hora-fim-error');
+    
+    if (!inicioInput.value) {
+        errorInicio.textContent = 'Por favor, selecione um horário';
+        inicioInput.classList.add('is-invalid');
+        return false;
+    }
+    
+    if (!fimInput.value) {
+        errorFim.textContent = 'Por favor, selecione um horário';
+        fimInput.classList.add('is-invalid');
+        return false;
+    }
+    
+    if (fimInput.value <= inicioInput.value) {
+        errorFim.textContent = 'O horário de término deve ser após o início';
+        fimInput.classList.add('is-invalid');
+        return false;
+    }
+    
+    inicioInput.classList.remove('is-invalid');
+    fimInput.classList.remove('is-invalid');
+    errorInicio.textContent = '';
+    errorFim.textContent = '';
+    return true;
+}
+
+function validarCamposObrigatorios() {
+    const localInput = document.getElementById('local_comparecimento');
+    const errorElement = document.getElementById('local-error');
+    
+    if (!localInput.value.trim()) {
+        errorElement.textContent = 'Por favor, informe o local';
+        localInput.classList.add('is-invalid');
+        return false;
+    }
+    
+    localInput.classList.remove('is-invalid');
+    errorElement.textContent = '';
+    return true;
+}
+
 

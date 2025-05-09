@@ -7,16 +7,19 @@ require_once 'C:/xampp/htdocs/TiaLu/processa/processa_pdf.php';
 $psi = new Psicologa();
 $consul = new Consulta();
 $pdf = new ProcessaPdfs();
-$consulPdf = new ConsultaPfd(); // Certifique-se que a classe está disponível
 $autenticacao = new Autenticacao();
+$consulPdf = new ConsultaPfd();
+
 
 // Processar logout se necessário
 $autenticacao->processarLogout();
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Verificação CSRF mais segura
-    if (empty($_POST['csrf_token']) || !isset($_SESSION['csrf_token']) || 
-        !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+    if (
+        empty($_POST['csrf_token']) || !isset($_SESSION['csrf_token']) ||
+        !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])
+    ) {
         http_response_code(403);
         die('Erro de segurança: Token CSRF inválido');
     }
@@ -62,15 +65,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         exit;
     } elseif (isset($_POST['gerar_consulta'])) {
         try {
-            $consulPdf = new ConsultaPfd();
             $resultados = $consulPdf->consultaPdfs();
         } catch (Exception $e) {
             $erro = $e->getMessage();
         }
     }
+    if (isset($_POST['abrir_pdf']) && isset($_POST['id_pdf'])) {
+    // Verifique o token CSRF
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die("Token CSRF inválido!");
+    }
+    
+    $id = (int)$_POST['id_pdf'];
+    if ($id > 0) {
+        
+        $consulPdf->showPdf($id);
+        exit;
+    }
+}
 } else {
     header('SiteLu.php');
 }
+
+$mostrar_form_consulta = false;
 
 $nomeUsuario = htmlspecialchars($_SESSION['usuario']['nome'] ?? 'Visitante', ENT_QUOTES, 'UTF-8');
 $crpUsuario = htmlspecialchars($_SESSION['usuario']['crp'] ?? 'CRP não informado', ENT_QUOTES, 'UTF-8');
@@ -87,6 +104,7 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/SiteLu.css">
 
 </head>
@@ -156,10 +174,10 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
                     </div>
                     <div class="col-12 mt-2">
                         <div class="btn-group">
-                            <button type="submit" class="btn " name="gerar_atestado">
+                            <button type="submit" class="btn btn-secondary " name="gerar_atestado">
                                 <i class="bi bi-file-earmark-pdf"></i> Gerar PDF
                             </button>
-                            <button type="reset" class="btn ">
+                            <button type="reset" class="btn btn-secondary ">
                                 <i class="bi bi-eraser"></i> Limpar
                             </button>
                         </div>
@@ -172,29 +190,32 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
             <form id="comparecimento-form" method="post" action="">
                 <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <div class="row g-3">
-
                     <div class="col-md-6">
                         <label for="data_atendimento" class="form-label">Data da Consulta:</label>
                         <input type="date" class="form-control" id="data_atendimento" name="data_atendimento" required>
+                        <div id="data-error" class="invalid-feedback"></div>
                     </div>
                     <div class="col-md-6">
                         <label for="horario_inicio" class="form-label">Horário de início:</label>
                         <input type="time" class="form-control" id="horario_inicio" name="horario_inicio" required>
+                        <div id="hora-inicio-error" class="invalid-feedback"></div>
                     </div>
                     <div class="col-md-6">
                         <label for="horario_fim" class="form-label">Horário de término:</label>
                         <input type="time" class="form-control" id="horario_fim" name="horario_fim" required>
+                        <div id="hora-fim-error" class="invalid-feedback"></div>
                     </div>
                     <div class="col-12">
                         <label for="local_comparecimento" class="form-label">Local:</label>
                         <input type="text" class="form-control" id="local_comparecimento" name="local" required>
+                        <div id="local-error" class="invalid-feedback"></div>
                     </div>
                     <div class="col-12 mt-2">
                         <div class="btn-group">
-                            <button type="submit" class="btn " name="gerar_comparecimento">
+                            <button type="submit" class="btn btn-secondary " name="gerar_comparecimento">
                                 <i class="bi bi-file-earmark-pdf"></i> Gerar PDF
                             </button>
-                            <button type="reset" class="btn ">
+                            <button type="reset" class="btn btn-secondary">
                                 <i class="bi bi-eraser"></i> Limpar
                             </button>
                         </div>
@@ -204,14 +225,14 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
         </div>
         <div id="recibo-content" class="document-content">
             <form id="recibo-form" method="post" action="">
-            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
-            <div class="row g-3">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                <div class="row g-3">
                     <div class="col-12 mt-2">
                         <div class="btn-group">
-                            <button type="submit" class="btn " name="gerar_recibo">
+                            <button type="submit" class="btn btn-secondary " name="gerar_recibo">
                                 <i class="bi bi-file-earmark-pdf"></i> Gerar PDF
                             </button>
-                            <button type="reset" class="btn ">
+                            <button type="reset" class="btn btn-secondary ">
                                 <i class="bi bi-eraser"></i> Limpar
                             </button>
                         </div>
@@ -221,8 +242,8 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
         </div>
         <div id="consulta-content" class="document-content">
             <form method="POST" action="" id="consulta_form">
-            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
-            <div class="row g-3">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                <div class="row g-3">
                     <div class="col-md-12">
                         <label for="nome_paciente" class="form-label">Nome do Paciente:</label>
                         <input type="text" class="form-control" id="nome_paciente" name="nome_paciente"
@@ -230,16 +251,16 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
                             required autofocus>
                     </div>
                     <div class="col-md-12 text-center mt-3">
-                        <div class="btn-group">
-                            <button type="submit" class="btn " name="consul_paci">
+                        <div class="btn-group w-100">
+                            <button type="submit" class="btn btn-secondary col-6" name="consul_paci">
                                 <i class="bi bi-file-earmark-pdf"></i> Consulta
                             </button>
+                            <?php $autenticacao->exibirBotoesAuth(Autenticacao::PACIENTE); ?>
                         </div>
-                        <?php $autenticacao->exibirBotoesAuth(Autenticacao::PACIENTE);
-                        ?>
                     </div>
                 </div>
             </form>
+
             <!-- Exibição de erros -->
             <?php if (isset($_SESSION['erro'])): ?>
                 <div class="alert alert-danger mt-3">
@@ -247,6 +268,7 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
                 </div>
                 <?php unset($_SESSION['erro']); ?>
             <?php endif; ?>
+
             <!-- Resultados da Consulta -->
             <?php if (isset($_SESSION['resultado_consulta'])): ?>
                 <div class="mt-4">
@@ -268,22 +290,28 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </div>
+
+                        <!-- Formulário de Observações -->
                         <div class="row mt-4">
                             <div class="col-md-12">
                                 <form method="POST" action="">
                                     <input type="hidden" name="id_paciente"
                                         value="<?= htmlspecialchars($_SESSION['resultado_consulta']['id_anam'] ?? '') ?>">
+                                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                                     <div class="card">
-                                        <div class="card-header bg-primary text-white">
+                                        <div class="card-header text-white" style="background-color: rgba(135, 150, 99, 0.84);">
                                             <h5 class="mb-0">Observações do Paciente</h5>
                                         </div>
                                         <div class="card-body">
                                             <textarea name="observacoes" rows="5" style="min-height: 150px;"
-                                                class="form-control"><?= htmlspecialchars($_SESSION['resultado_consulta']['observacao_paciente'] ?? '') ?>
-                                                                                                                                            </textarea>
+                                                class="form-control">
+                                                <?= htmlspecialchars($_SESSION['resultado_consulta']['observacao_paciente'] ?? '') ?>
+                                            </textarea>
                                         </div>
                                         <div class="card-footer text-end">
-                                            <button type="submit" class="btn btn-primary" name="salvar_observacoes">
+                                            <button type="submit"
+                                                style="background-color: rgba(135, 150, 99, 0.84); border-color: rgba(135, 150, 99, 0.84);"
+                                                class="btn text-white" name="salvar_observacoes">
                                                 <i class="bi bi-save"></i> Salvar Observações
                                             </button>
                                         </div>
@@ -293,13 +321,9 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
                         </div>
                     <?php else: ?>
                         <div class="alert alert-warning mt-3">
-                            Nenhum paciente encontrado com este nome.
+                            Nenhum resultado encontrado.
                         </div>
                     <?php endif; ?>
-                </div>
-            <?php else: ?>
-                <div class="alert alert-warning mt-3">
-                    Nenhum paciente encontrado com este nome.
                 </div>
             <?php endif; ?>
         </div>
@@ -309,7 +333,7 @@ $cpfUsuario = htmlspecialchars($_SESSION['usuario']['cpf'] ?? 'cpf não cadastra
             <h1>Consulta de Documentos Médicos</h1>
 
             <form id="consultaForm" method="POST" action="">
-            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <div class="filtro-option">
                     <input type="radio" id="filtroData" name="filtro" value="data_criacao">
                     <label for="filtroData">Data de Criação</label>

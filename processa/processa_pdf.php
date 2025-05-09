@@ -15,17 +15,20 @@ class ProcessaPdfs
     private $logoPath;
     private $base64;
     private $options;
-    private $basePath;
+    private static $basePath;
     public function __construct()
     {
         $this->configurarImg(); // Configura automaticamente ao instanciar
-         $this->basePath = realpath('C:/xampp/htdocs/TiaLu/caminho/pdf');
+         self::$basePath = realpath('caminho/pdf/');
         // Garante que o diretório base existe
-        if (!file_exists($this->basePath)) {
-            if (!mkdir($this->basePath, 0755, true)) {
+        if (!file_exists(self::$basePath)) {
+            if (!mkdir(self::$basePath, 0755, true)) {
                 throw new Exception("Não foi possível criar o diretório para PDFs");
             }
         }
+    }
+    public static function getBasePath() {
+        return self::$basePath;
     }
     public function configurarImg()
     {
@@ -56,9 +59,13 @@ class ProcessaPdfs
         $this->options->set('defaultFont', 'Arial');
         
     }
+
+
     public function gerarAtestado($identificacao)
     {
-        $this->validarIdPaciente($identificacao);
+         if (!is_numeric($identificacao)) {
+            die("ID do paciente inválido");
+        }
         $camposObrigatorios = ['hora_inicio', 'hora_fim', 'motivo', 'retorno', 'data', 'local'];
         $this->validarCamposObrigatorios($camposObrigatorios);
 
@@ -70,10 +77,11 @@ class ProcessaPdfs
 
     public function gerarComparecimento($identificacao)
     {
-        $this->validarIdPaciente($identificacao);
+         if (!is_numeric($identificacao)) {
+            die("ID do paciente inválido");
+        }
         $camposObrigatorios = ['horario_inicio', 'horario_fim', 'local', 'data_atendimento'];
         $this->validarCamposObrigatorios($camposObrigatorios);
-
         $dados = $this->processarDadosFormulario();
         $html = $this->gerarHtmlComparecimento($dados);
 
@@ -81,9 +89,7 @@ class ProcessaPdfs
     }
 
     public function gerarRecibo($identificacao)
-    {
-        $this->validarIdPaciente($identificacao);
-        
+    {        
         $vali = new Vali();
         $cpf_paciente = $vali->formatarCPF($_SESSION['resultado_consulta']['CPF']);
         $dados = $this->processarDadosRecibo($cpf_paciente);
@@ -95,7 +101,7 @@ class ProcessaPdfs
     private function gerarPdf($html, $idPaciente, $tipoDocumento)
     {
         $nomeArquivo = $this->gerarNomeArquivo($tipoDocumento);
-        $caminhoArquivo = $this->basePath . DIRECTORY_SEPARATOR . $nomeArquivo;
+        $caminhoArquivo = ProcessaPdfs::getBasePath() . DIRECTORY_SEPARATOR . $nomeArquivo;
 
         try {
             $dompdf = new Dompdf($this->options);
